@@ -48,7 +48,18 @@ class PdfOutputPreviewState extends State<PdfOutputPreview> {
       ],
     ),
     // PdfViewer owns and disposes its document reference when unmounted.
-    body: PdfViewer.data(widget.bytes, sourceName: widget.name),
+    body: PdfViewer.data(
+      widget.bytes,
+      sourceName: widget.name,
+      params: PdfViewerParams(
+        errorBannerBuilder: (context, error, stackTrace, documentRef) =>
+            const Center(
+              child: Text(
+                'Preview unavailable. Go back and try again, or save the PDF.',
+              ),
+            ),
+      ),
+    ),
     bottomNavigationBar: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),

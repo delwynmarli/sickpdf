@@ -9,6 +9,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'services/pdf_merge_service.dart';
 import 'screens/split_pdf_page.dart';
 import 'screens/organize_pdf_page.dart';
+import 'screens/compress_pdf_page.dart';
 
 const _navy = Color(0xFF0B172A);
 const _navyLight = Color(0xFF14243D);
@@ -262,7 +263,8 @@ class ToolCard extends StatelessWidget {
       label:
           title == 'Merge PDF' ||
               title == 'Split PDF' ||
-              title == 'Organize PDF'
+              title == 'Organize PDF' ||
+              title == 'Compress PDF'
           ? title
           : '$title, coming soon',
       child: InkWell(
@@ -277,6 +279,12 @@ class ToolCard extends StatelessWidget {
           if (title == 'Split PDF') {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const SplitPdfPage()),
+            );
+            return;
+          }
+          if (title == 'Compress PDF') {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const CompressPdfPage()),
             );
             return;
           }
