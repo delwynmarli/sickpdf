@@ -9,6 +9,7 @@ import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
     private val protectWorker = Executors.newSingleThreadExecutor()
+    private val unlockWorker = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -30,18 +31,36 @@ class MainActivity : FlutterActivity() {
                         val output = PdfProtector.protect(bytes, password)
                         runOnUiThread { result.success(output) }
                     } catch (_: InvalidPasswordException) {
-                        runOnUiThread {
-                            result.error("locked_pdf", "Use an unlocked PDF.", null)
-                        }
+                        runOnUiThread { result.error("locked_pdf", "Use an unlocked PDF.", null) }
                     } catch (_: Exception) {
-                        // Never forward exception text or arguments: they may contain secrets.
-                        runOnUiThread {
-                            result.error("protect_failed", "Could not protect this PDF.", null)
-                        }
+                        runOnUiThread { result.error("protect_failed", "Could not protect this PDF.", null) }
                     } catch (_: OutOfMemoryError) {
-                        runOnUiThread {
-                            result.error("too_large", "Not enough memory. Try a smaller PDF.", null)
-                        }
+                        runOnUiThread { result.error("too_large", "Not enough memory. Try a smaller PDF.", null) }
+                    }
+                }
+            }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/unlock")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "unlock") {
+                    result.notImplemented()
+                    return@setMethodCallHandler
+                }
+                val bytes = call.argument<ByteArray>("bytes")
+                val password = call.argument<String>("password")
+                if (bytes == null || password == null || password.isEmpty()) {
+                    result.error("invalid_input", "Invalid unlock request.", null)
+                    return@setMethodCallHandler
+                }
+                unlockWorker.execute {
+                    try {
+                        val output = PdfUnlocker.unlock(bytes, password)
+                        runOnUiThread { result.success(output) }
+                    } catch (_: InvalidPasswordException) {
+                        runOnUiThread { result.error("wrong_password", "Incorrect PDF password.", null) }
+                    } catch (_: Exception) {
+                        runOnUiThread { result.error("unlock_failed", "Could not unlock this PDF.", null) }
+                    } catch (_: OutOfMemoryError) {
+                        runOnUiThread { result.error("too_large", "Not enough memory. Try a smaller PDF.", null) }
                     }
                 }
             }
@@ -49,6 +68,7 @@ class MainActivity : FlutterActivity() {
 
     override fun onDestroy() {
         protectWorker.shutdown()
+        unlockWorker.shutdown()
         super.onDestroy()
     }
 }
