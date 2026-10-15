@@ -29,6 +29,10 @@ android {
         versionName = flutter.versionName
     }
 
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     buildTypes {
         release {
             // TODO: Add your own signing config for the release build.
@@ -42,6 +46,12 @@ kotlin {
     compilerOptions {
         jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
+}
+
+dependencies {
+    // Already bundled by pdf_combiner; declared directly for the native bridge.
+    implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    testImplementation("junit:junit:4.13.2")
 }
 
 flutter {

@@ -10,8 +10,10 @@ class PdfOutputPreview extends StatefulWidget {
     required this.name,
     required this.onSave,
     this.backLabel = 'Back to Split',
+    this.passwordProvider,
   });
   final String backLabel;
+  final PdfPasswordProvider? passwordProvider;
   final Uint8List bytes;
   final String name;
   final Future<String> Function() onSave;
@@ -51,6 +53,7 @@ class PdfOutputPreviewState extends State<PdfOutputPreview> {
     body: PdfViewer.data(
       widget.bytes,
       sourceName: widget.name,
+      passwordProvider: widget.passwordProvider,
       params: PdfViewerParams(
         errorBannerBuilder: (context, error, stackTrace, documentRef) =>
             const Center(
