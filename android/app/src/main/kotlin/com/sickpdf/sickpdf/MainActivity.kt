@@ -10,6 +10,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private val protectWorker = Executors.newSingleThreadExecutor()
     private val unlockWorker = Executors.newSingleThreadExecutor()
+    private val watermarkWorker = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -64,11 +65,32 @@ class MainActivity : FlutterActivity() {
                     }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/watermark")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "watermark") { result.notImplemented(); return@setMethodCallHandler }
+                val bytes = call.argument<ByteArray>("bytes")
+                val text = call.argument<String>("text")
+                val fontSize = call.argument<Double>("fontSize")?.toFloat()
+                val opacity = call.argument<Double>("opacity")?.toFloat()
+                val position = call.argument<String>("position")
+                val rotation = call.argument<String>("rotation")
+                val pages = call.argument<List<Int>>("pages")
+                if (bytes == null || text == null || fontSize == null || opacity == null || position == null || rotation == null) {
+                    result.error("invalid_input", "Invalid watermark request.", null); return@setMethodCallHandler
+                }
+                watermarkWorker.execute {
+                    try { runOnUiThread { result.success(PdfWatermarker.apply(bytes, text, fontSize, opacity, position, rotation, pages)) } }
+                    catch (error: IllegalArgumentException) { runOnUiThread { result.error("invalid_input", error.message, null) } }
+                    catch (_: OutOfMemoryError) { runOnUiThread { result.error("too_large", "Not enough memory. Try a smaller PDF.", null) } }
+                    catch (_: Exception) { runOnUiThread { result.error("watermark_failed", "Could not watermark this PDF. It may be encrypted, damaged, signed, or unsupported.", null) } }
+                }
+            }
     }
 
     override fun onDestroy() {
         protectWorker.shutdown()
         unlockWorker.shutdown()
+        watermarkWorker.shutdown()
         super.onDestroy()
     }
 }
