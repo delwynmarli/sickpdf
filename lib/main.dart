@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import 'services/pdf_merge_service.dart';
+import 'screens/split_pdf_page.dart';
 
 const _navy = Color(0xFF0B172A);
 const _navyLight = Color(0xFF14243D);
@@ -257,13 +258,21 @@ class ToolCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       button: true,
-      label: '$title, coming soon',
+      label: title == 'Merge PDF' || title == 'Split PDF'
+          ? title
+          : '$title, coming soon',
       child: InkWell(
         borderRadius: BorderRadius.circular(20),
         onTap: () {
           if (title == 'Merge PDF') {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const MergePdfPage()),
+            );
+            return;
+          }
+          if (title == 'Split PDF') {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SplitPdfPage()),
             );
             return;
           }

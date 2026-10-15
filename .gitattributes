@@ -1,0 +1,2 @@
+# Preserve synthetic PDF fixture byte offsets; never normalize line endings.
+/test/fixtures/*.pdf binary
