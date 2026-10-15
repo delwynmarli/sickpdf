@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../services/pdf_split_service.dart';
+import 'pdf_output_preview.dart';
 
 const _navy = Color(0xFF0B172A);
 
@@ -184,7 +185,7 @@ class _SplitPdfPageState extends State<SplitPdfPage> {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (_) =>
-            _SplitPreview(bytes: bytes, name: _resultName!, onSave: _save),
+            PdfOutputPreview(bytes: bytes, name: _resultName!, onSave: _save),
       ),
     );
   }
@@ -291,67 +292,4 @@ class _SplitPdfPageState extends State<SplitPdfPage> {
       ),
     );
   }
-}
-
-class _SplitPreview extends StatefulWidget {
-  const _SplitPreview({
-    required this.bytes,
-    required this.name,
-    required this.onSave,
-  });
-  final Uint8List bytes;
-  final String name;
-  final Future<String> Function() onSave;
-
-  @override
-  State<_SplitPreview> createState() => _SplitPreviewState();
-}
-
-class _SplitPreviewState extends State<_SplitPreview> {
-  bool _saving = false;
-  String? _message;
-
-  Future<void> _save() async {
-    if (_saving) return;
-    setState(() => _saving = true);
-    final message = await widget.onSave();
-    if (!mounted) return;
-    setState(() {
-      _saving = false;
-      _message = message;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('Preview PDF'),
-      actions: [
-        TextButton.icon(
-          onPressed: _saving ? null : _save,
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('Save PDF'),
-        ),
-      ],
-    ),
-    // PdfViewer owns and disposes its document reference when unmounted.
-    body: PdfViewer.data(widget.bytes, sourceName: widget.name),
-    bottomNavigationBar: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (_saving) const LinearProgressIndicator(),
-            if (_message != null)
-              Semantics(liveRegion: true, child: Text(_message!)),
-            OutlinedButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Back to Split'),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
 }

@@ -6,7 +6,7 @@ import 'package:pdfrx/pdfrx.dart';
 import 'package:sickpdf/services/pdf_split_service.dart';
 
 // Synthetic fixture: distinct dimensions identify page order without private PDFs.
-Uint8List _pdf(int count) {
+Uint8List syntheticPdf(int count) {
   final objects = <String>[
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [${List.generate(count, (i) => '${i + 3} 0 R').join(' ')}] /Count $count >>',
@@ -82,7 +82,7 @@ void main() {
       );
       Pdfrx.cacheDirectoryPath = directory.path;
       try {
-        final original = _pdf(10);
+        final original = syntheticPdf(10);
         final file = await File('${directory.path}/input.pdf')
             .writeAsBytes(original);
         final service = PdfSplitService();
