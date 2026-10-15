@@ -10,6 +10,7 @@ import 'services/pdf_merge_service.dart';
 import 'screens/split_pdf_page.dart';
 import 'screens/organize_pdf_page.dart';
 import 'screens/compress_pdf_page.dart';
+import 'screens/rotate_pdf_page.dart';
 
 const _navy = Color(0xFF0B172A);
 const _navyLight = Color(0xFF14243D);
@@ -124,6 +125,7 @@ class HomePage extends StatelessWidget {
               ToolCard(icon: Icons.call_split, title: 'Split PDF'),
               ToolCard(icon: Icons.compress, title: 'Compress PDF'),
               ToolCard(icon: Icons.reorder, title: 'Organize PDF'),
+              ToolCard(icon: Icons.rotate_right, title: 'Rotate PDF'),
               ToolCard(icon: Icons.image_outlined, title: 'Image to PDF'),
               ToolCard(icon: Icons.draw_outlined, title: 'Sign PDF'),
             ],
@@ -264,7 +266,8 @@ class ToolCard extends StatelessWidget {
           title == 'Merge PDF' ||
               title == 'Split PDF' ||
               title == 'Organize PDF' ||
-              title == 'Compress PDF'
+              title == 'Compress PDF' ||
+              title == 'Rotate PDF'
           ? title
           : '$title, coming soon',
       child: InkWell(
@@ -285,6 +288,12 @@ class ToolCard extends StatelessWidget {
           if (title == 'Compress PDF') {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const CompressPdfPage()),
+            );
+            return;
+          }
+          if (title == 'Rotate PDF') {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const RotatePdfPage()),
             );
             return;
           }
