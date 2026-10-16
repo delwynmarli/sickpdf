@@ -17,6 +17,7 @@ class MainActivity : FlutterActivity() {
     private val watermarkWorker = Executors.newSingleThreadExecutor()
     private val pageNumberWorker = Executors.newSingleThreadExecutor()
     private val signWorker = Executors.newSingleThreadExecutor()
+    private val addTextWorker = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -115,6 +116,28 @@ class MainActivity : FlutterActivity() {
                     catch (_: Exception) { runOnUiThread { result.error("sign_failed", "Could not sign this PDF. It may be encrypted, damaged, signed, or unsupported.", null) } }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/addtext")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "addText") { result.notImplemented(); return@setMethodCallHandler }
+                val bytes = call.argument<ByteArray>("bytes")
+                val text = call.argument<String>("text")
+                val fontSize = call.argument<Double>("fontSize")?.toFloat()
+                val colorR = call.argument<Double>("colorR")?.toFloat()
+                val colorG = call.argument<Double>("colorG")?.toFloat()
+                val colorB = call.argument<Double>("colorB")?.toFloat()
+                val alignment = call.argument<String>("alignment")
+                val vertical = call.argument<String>("vertical")
+                val pages = call.argument<List<Int>>("pages")
+                if (bytes == null || text == null || fontSize == null || colorR == null || colorG == null || colorB == null || alignment == null || vertical == null) {
+                    result.error("invalid_input", "Invalid text request.", null); return@setMethodCallHandler
+                }
+                addTextWorker.execute {
+                    try { runOnUiThread { result.success(PdfTextAdder.apply(bytes, text, fontSize, colorR, colorG, colorB, alignment, vertical, pages)) } }
+                    catch (error: IllegalArgumentException) { runOnUiThread { result.error("invalid_input", error.message, null) } }
+                    catch (_: OutOfMemoryError) { runOnUiThread { result.error("too_large", "Not enough memory. Try a smaller PDF.", null) } }
+                    catch (_: Exception) { runOnUiThread { result.error("addtext_failed", "Could not add text to this PDF. It may be encrypted, damaged, signed, or unsupported.", null) } }
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/pagenumbers")
             .setMethodCallHandler { call, result ->
                 if (call.method != "addPageNumbers") { result.notImplemented(); return@setMethodCallHandler }
@@ -179,6 +202,7 @@ class MainActivity : FlutterActivity() {
         watermarkWorker.shutdown()
         pageNumberWorker.shutdown()
         signWorker.shutdown()
+        addTextWorker.shutdown()
         super.onDestroy()
     }
 }
