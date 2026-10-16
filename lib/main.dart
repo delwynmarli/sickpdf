@@ -15,6 +15,7 @@ import 'screens/protect_pdf_page.dart';
 import 'screens/unlock_pdf_page.dart';
 import 'screens/watermark_pdf_page.dart';
 import 'screens/page_numbers_pdf_page.dart';
+import 'screens/sign_pdf_page.dart';
 
 const _navy = Color(0xFF0B172A);
 const _navyLight = Color(0xFF14243D);
@@ -279,7 +280,8 @@ class ToolCard extends StatelessWidget {
               title == 'Protect PDF' ||
               title == 'Unlock PDF' ||
               title == 'Watermark PDF' ||
-              title == 'Page Numbers PDF'
+              title == 'Page Numbers PDF' ||
+              title == 'Sign PDF'
           ? title
           : '$title, coming soon',
       child: InkWell(
@@ -338,6 +340,12 @@ class ToolCard extends StatelessWidget {
           if (title == 'Organize PDF') {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const OrganizePdfPage()),
+            );
+            return;
+          }
+          if (title == 'Sign PDF') {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(builder: (_) => const SignPdfPage()),
             );
             return;
           }

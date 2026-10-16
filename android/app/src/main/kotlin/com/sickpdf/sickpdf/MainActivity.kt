@@ -1,10 +1,14 @@
 package com.sickpdf.sickpdf
 
+import android.content.Intent
+import androidx.core.content.FileProvider
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.encryption.InvalidPasswordException
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import java.io.File
+import java.io.FileOutputStream
 import java.util.concurrent.Executors
 
 class MainActivity : FlutterActivity() {
@@ -12,6 +16,7 @@ class MainActivity : FlutterActivity() {
     private val unlockWorker = Executors.newSingleThreadExecutor()
     private val watermarkWorker = Executors.newSingleThreadExecutor()
     private val pageNumberWorker = Executors.newSingleThreadExecutor()
+    private val signWorker = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -86,6 +91,30 @@ class MainActivity : FlutterActivity() {
                     catch (_: Exception) { runOnUiThread { result.error("watermark_failed", "Could not watermark this PDF. It may be encrypted, damaged, signed, or unsupported.", null) } }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/sign")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "sign") { result.notImplemented(); return@setMethodCallHandler }
+                val bytes = call.argument<ByteArray>("bytes")
+                val signature = call.argument<ByteArray>("signature")
+                val pageIndex = call.argument<Int>("pageIndex")
+                val position = call.argument<String>("position")
+                val widthFraction = call.argument<Double>("widthFraction")?.toFloat()
+                val heightFraction = call.argument<Double>("heightFraction")?.toFloat()
+                val offsetXFraction = call.argument<Double>("offsetXFraction")?.toFloat()
+                val offsetYFraction = call.argument<Double>("offsetYFraction")?.toFloat()
+                val opacity = call.argument<Double>("opacity")?.toFloat()
+                if (bytes == null || signature == null || pageIndex == null || position == null ||
+                    widthFraction == null || heightFraction == null || offsetXFraction == null ||
+                    offsetYFraction == null || opacity == null) {
+                    result.error("invalid_input", "Invalid signature request.", null); return@setMethodCallHandler
+                }
+                signWorker.execute {
+                    try { runOnUiThread { result.success(PdfSigner.apply(bytes, signature, pageIndex, position, widthFraction, heightFraction, offsetXFraction, offsetYFraction, opacity)) } }
+                    catch (error: IllegalArgumentException) { runOnUiThread { result.error("invalid_input", error.message, null) } }
+                    catch (_: OutOfMemoryError) { runOnUiThread { result.error("too_large", "Not enough memory. Try a smaller PDF.", null) } }
+                    catch (_: Exception) { runOnUiThread { result.error("sign_failed", "Could not sign this PDF. It may be encrypted, damaged, signed, or unsupported.", null) } }
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/pagenumbers")
             .setMethodCallHandler { call, result ->
                 if (call.method != "addPageNumbers") { result.notImplemented(); return@setMethodCallHandler }
@@ -109,6 +138,39 @@ class MainActivity : FlutterActivity() {
                     catch (_: Exception) { runOnUiThread { result.error("pagenumber_failed", "Could not add page numbers. It may be encrypted, damaged, signed, or unsupported.", null) } }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/share")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "share") { result.notImplemented(); return@setMethodCallHandler }
+                val bytes = call.argument<ByteArray>("bytes")
+                val fileName = call.argument<String>("fileName")
+                if (bytes == null || bytes.isEmpty() || fileName.isNullOrBlank()) {
+                    result.error("invalid_input", "Nothing to share.", null); return@setMethodCallHandler
+                }
+                try {
+                    val safeName = File(fileName).name.let {
+                        if (it.lowercase().endsWith(".pdf")) it else "$it.pdf"
+                    }
+                    val directory = File(cacheDir, "signed").apply { mkdirs() }
+                    val target = File(directory, safeName)
+                    FileOutputStream(target).use { it.write(bytes) }
+                    val uri = FileProvider.getUriForFile(
+                        this,
+                        "$packageName.fileprovider",
+                        target,
+                    )
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/pdf"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    runOnUiThread {
+                        startActivity(Intent.createChooser(intent, "Share signed PDF"))
+                        result.success(null)
+                    }
+                } catch (_: Exception) {
+                    runOnUiThread { result.error("share_failed", "Could not share this PDF.", null) }
+                }
+            }
     }
 
     override fun onDestroy() {
@@ -116,6 +178,7 @@ class MainActivity : FlutterActivity() {
         unlockWorker.shutdown()
         watermarkWorker.shutdown()
         pageNumberWorker.shutdown()
+        signWorker.shutdown()
         super.onDestroy()
     }
 }

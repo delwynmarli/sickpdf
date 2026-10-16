@@ -51,6 +51,8 @@ kotlin {
 dependencies {
     // Already bundled by pdf_combiner; declared directly for the native bridge.
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+    // FileProvider for locally sharing the signed PDF with other apps.
+    implementation("androidx.core:core-ktx:1.13.1")
     testImplementation("junit:junit:4.13.2")
 }
 
