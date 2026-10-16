@@ -14,6 +14,7 @@ import 'screens/rotate_pdf_page.dart';
 import 'screens/protect_pdf_page.dart';
 import 'screens/unlock_pdf_page.dart';
 import 'screens/watermark_pdf_page.dart';
+import 'screens/page_numbers_pdf_page.dart';
 
 const _navy = Color(0xFF0B172A);
 const _navyLight = Color(0xFF14243D);
@@ -132,6 +133,7 @@ class HomePage extends StatelessWidget {
               ToolCard(icon: Icons.lock_outline, title: 'Protect PDF'),
               ToolCard(icon: Icons.lock_open_outlined, title: 'Unlock PDF'),
               ToolCard(icon: Icons.water_drop_outlined, title: 'Watermark PDF'),
+              ToolCard(icon: Icons.pin_outlined, title: 'Page Numbers PDF'),
               ToolCard(icon: Icons.image_outlined, title: 'Image to PDF'),
               ToolCard(icon: Icons.draw_outlined, title: 'Sign PDF'),
             ],
@@ -276,7 +278,8 @@ class ToolCard extends StatelessWidget {
               title == 'Rotate PDF' ||
               title == 'Protect PDF' ||
               title == 'Unlock PDF' ||
-              title == 'Watermark PDF'
+              title == 'Watermark PDF' ||
+              title == 'Page Numbers PDF'
           ? title
           : '$title, coming soon',
       child: InkWell(
@@ -321,6 +324,14 @@ class ToolCard extends StatelessWidget {
           if (title == 'Watermark PDF') {
             Navigator.of(context).push(
               MaterialPageRoute<void>(builder: (_) => const WatermarkPdfPage()),
+            );
+            return;
+          }
+          if (title == 'Page Numbers PDF') {
+            Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => const PageNumbersPdfPage(),
+              ),
             );
             return;
           }

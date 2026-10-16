@@ -11,6 +11,7 @@ class MainActivity : FlutterActivity() {
     private val protectWorker = Executors.newSingleThreadExecutor()
     private val unlockWorker = Executors.newSingleThreadExecutor()
     private val watermarkWorker = Executors.newSingleThreadExecutor()
+    private val pageNumberWorker = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -85,12 +86,36 @@ class MainActivity : FlutterActivity() {
                     catch (_: Exception) { runOnUiThread { result.error("watermark_failed", "Could not watermark this PDF. It may be encrypted, damaged, signed, or unsupported.", null) } }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/pagenumbers")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "addPageNumbers") { result.notImplemented(); return@setMethodCallHandler }
+                val bytes = call.argument<ByteArray>("bytes")
+                val format = call.argument<String>("format")
+                val position = call.argument<String>("position")
+                val startNumber = call.argument<Int>("startNumber")
+                val firstPage = call.argument<Int>("firstPage")
+                val lastPage = call.argument<Int>("lastPage")
+                val fontSize = call.argument<Double>("fontSize")?.toFloat()
+                val colorR = call.argument<Double>("colorR")?.toFloat()
+                val colorG = call.argument<Double>("colorG")?.toFloat()
+                val colorB = call.argument<Double>("colorB")?.toFloat()
+                if (bytes == null || format == null || position == null || startNumber == null || firstPage == null || lastPage == null || fontSize == null || colorR == null || colorG == null || colorB == null) {
+                    result.error("invalid_input", "Invalid page numbering request.", null); return@setMethodCallHandler
+                }
+                pageNumberWorker.execute {
+                    try { runOnUiThread { result.success(PdfPageNumberer.apply(bytes, format, position, startNumber, firstPage, lastPage, fontSize, colorR, colorG, colorB)) } }
+                    catch (error: IllegalArgumentException) { runOnUiThread { result.error("invalid_input", error.message, null) } }
+                    catch (_: OutOfMemoryError) { runOnUiThread { result.error("too_large", "Not enough memory. Try a smaller PDF.", null) } }
+                    catch (_: Exception) { runOnUiThread { result.error("pagenumber_failed", "Could not add page numbers. It may be encrypted, damaged, signed, or unsupported.", null) } }
+                }
+            }
     }
 
     override fun onDestroy() {
         protectWorker.shutdown()
         unlockWorker.shutdown()
         watermarkWorker.shutdown()
+        pageNumberWorker.shutdown()
         super.onDestroy()
     }
 }
