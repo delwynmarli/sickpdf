@@ -18,6 +18,7 @@ class MainActivity : FlutterActivity() {
     private val pageNumberWorker = Executors.newSingleThreadExecutor()
     private val signWorker = Executors.newSingleThreadExecutor()
     private val addTextWorker = Executors.newSingleThreadExecutor()
+    private val imageWorker = Executors.newSingleThreadExecutor()
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -161,6 +162,24 @@ class MainActivity : FlutterActivity() {
                     catch (_: Exception) { runOnUiThread { result.error("pagenumber_failed", "Could not add page numbers. It may be encrypted, damaged, signed, or unsupported.", null) } }
                 }
             }
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/images")
+            .setMethodCallHandler { call, result ->
+                if (call.method != "convert") { result.notImplemented(); return@setMethodCallHandler }
+                val images = call.argument<List<ByteArray>>("images")
+                val pageSize = call.argument<String>("pageSize")
+                val margin = call.argument<Double>("margin")?.toFloat()
+                val fit = call.argument<String>("fit")
+                val squareSide = call.argument<Double>("squareSide")?.toFloat()
+                if (images == null || images.isEmpty() || pageSize == null || margin == null || fit == null || squareSide == null) {
+                    result.error("invalid_input", "Invalid image conversion request.", null); return@setMethodCallHandler
+                }
+                imageWorker.execute {
+                    try { runOnUiThread { result.success(PdfImageConverter.convert(images, pageSize, margin, fit, squareSide)) } }
+                    catch (error: IllegalArgumentException) { runOnUiThread { result.error("invalid_input", error.message, null) } }
+                    catch (_: OutOfMemoryError) { runOnUiThread { result.error("too_large", "Not enough memory. Try fewer or smaller images.", null) } }
+                    catch (_: Exception) { runOnUiThread { result.error("convert_failed", "Could not create the PDF from these images. Try removing the affected image.", null) } }
+                }
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "sickpdf/share")
             .setMethodCallHandler { call, result ->
                 if (call.method != "share") { result.notImplemented(); return@setMethodCallHandler }
@@ -203,6 +222,7 @@ class MainActivity : FlutterActivity() {
         pageNumberWorker.shutdown()
         signWorker.shutdown()
         addTextWorker.shutdown()
+        imageWorker.shutdown()
         super.onDestroy()
     }
 }
