@@ -9,6 +9,8 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 
 import '../services/pdf_organize_service.dart';
 import '../services/pdf_split_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 class OrganizePdfPage extends StatefulWidget {
@@ -229,27 +231,33 @@ class _OrganizePdfPageState extends State<OrganizePdfPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Organize PDF')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Reorder and remove pages privately on your device.'),
+            const ToolIntro(
+              text:
+                  'Reorder and remove pages. Drag the handle or use the arrows. The original file stays unchanged.',
+            ),
             OutlinedButton.icon(
               onPressed: _busy ? null : _pick,
               icon: const Icon(Icons.upload_file),
               label: const Text('Select PDF'),
             ),
             if (_sourceName != null)
-              Text(
-                '$_sourceName • ${pages.length} of ${_session!.document.pages.length} pages',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.md),
+                child: Text(
+                  '$_sourceName • ${pages.length} of ${_session!.document.pages.length} pages',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             if (pages.isNotEmpty) ...[
-              const Text(
-                'Drag the handle or use the arrows. Checked pages are selected for removal.',
-                style: TextStyle(fontSize: 12),
-              ),
+              const SizedBox(height: AppSpacing.xs),
               Wrap(
                 spacing: 8,
                 children: [
@@ -270,6 +278,7 @@ class _OrganizePdfPageState extends State<OrganizePdfPage> {
                 ],
               ),
             ],
+            const SizedBox(height: AppSpacing.md),
             Expanded(
               child: pages.isEmpty
                   ? const Center(
@@ -382,17 +391,15 @@ class _OrganizePdfPageState extends State<OrganizePdfPage> {
                       },
                     ),
             ),
-            if (_busy) const LinearProgressIndicator(),
-            if (_message != null)
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  _message!,
-                  style: TextStyle(
-                    color: _error ? Colors.red.shade700 : Colors.green.shade800,
-                  ),
-                ),
-              ),
+            if (_busy) ...[
+              const SizedBox(height: AppSpacing.xs),
+              const LinearProgressIndicator(),
+            ],
+            if (_message != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              ToolStatus(message: _message!, isError: _error),
+            ],
+            const SizedBox(height: AppSpacing.xs),
             TextField(
               controller: _filename,
               enabled: !_busy,

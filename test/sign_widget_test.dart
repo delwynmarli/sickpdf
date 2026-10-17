@@ -58,12 +58,13 @@ void main() {
     expect(find.byType(SignPdfPage), findsOneWidget);
     expect(find.textContaining('coming soon'), findsNothing);
     expect(find.text('Select PDF'), findsOneWidget);
-    expect(find.byType(SignaturePad), findsOneWidget);
+    // The signature pad appears after a PDF is selected, alongside placement.
+    expect(find.byType(SignaturePad), findsNothing);
     // Export is disabled until a PDF is loaded.
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Preview signed PDF'),
+            find.widgetWithText(FilledButton, 'Preview & Save'),
           )
           .onPressed,
       isNull,
@@ -94,11 +95,12 @@ void main() {
     );
     await tester.tap(find.text('Select PDF'));
     await tester.pumpAndSettle();
-    expect(find.text('Clear signature'), findsOneWidget);
+    expect(find.byType(SignaturePad), findsOneWidget);
+    expect(find.text('Clear'), findsOneWidget);
     expect(find.text('Target page'), findsOneWidget);
     // Preview is enabled once a PDF is loaded; the signature is validated
     // when pressed, producing a clear error instead of an empty export.
-    await tester.tap(find.text('Preview signed PDF'));
+    await tester.tap(find.text('Preview & Save'));
     await tester.pumpAndSettle();
     expect(
       find.text('Draw your signature before continuing.'),

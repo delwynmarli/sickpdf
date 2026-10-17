@@ -1,15 +1,17 @@
-import 'dart:typed_data';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../services/pdf_page_numbers_service.dart';
 import '../services/pdf_split_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 class PageNumbersPdfPage extends StatefulWidget {
   const PageNumbersPdfPage({super.key, this.service});
   final PdfPageNumbersService? service;
+
   @override
   State<PageNumbersPdfPage> createState() => _PageNumbersPdfPageState();
 }
@@ -49,14 +51,18 @@ class _PageNumbersPdfPageState extends State<PageNumbersPdfPage> {
     _first.dispose();
     _last.dispose();
     _filename.dispose();
+    _input = null;
+    _result = null;
     super.dispose();
   }
 
-  void _status(String value, {bool error = false}) =>
-      setState(() {
-        _message = value;
-        _error = error;
-      });
+  void _status(String value, {bool error = false}) {
+    if (!mounted) return;
+    setState(() {
+      _message = value;
+      _error = error;
+    });
+  }
 
   Future<void> _pick() async {
     if (_busy) return;
@@ -93,7 +99,10 @@ class _PageNumbersPdfPageState extends State<PageNumbersPdfPage> {
             '${file.name.replaceFirst(RegExp(r'\.pdf$', caseSensitive: false), '')}_numbered.pdf';
       });
     } catch (error) {
-      _status(pdfSplitLoadError(error).replaceAll('to split it', 'to number it'), error: true);
+      _status(
+        pdfSplitLoadError(error).replaceAll('to split it', 'to number it'),
+        error: true,
+      );
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -138,15 +147,19 @@ class _PageNumbersPdfPageState extends State<PageNumbersPdfPage> {
       _status(validation, error: true);
       return false;
     }
+    FocusScope.of(context).unfocus();
     setState(() => _busy = true);
     try {
       final output = await _service.apply(_input!, options);
       if (!mounted) return false;
       setState(() => _result = output);
       return true;
-    } catch (error) {
+    } on PdfPageNumbersException catch (error) {
+      _status(error.message, error: true);
+      return false;
+    } catch (_) {
       _status(
-        error.toString().replaceFirst('PdfPageNumbersException: ', ''),
+        'Could not add page numbers. Try an unlocked, undamaged PDF.',
         error: true,
       );
       return false;
@@ -204,176 +217,221 @@ class _PageNumbersPdfPageState extends State<PageNumbersPdfPage> {
 
   @override
   Widget build(BuildContext context) {
+    final hasFile = _input != null;
     return Scaffold(
       appBar: AppBar(title: const Text('Page Numbers PDF')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         children: [
-          const Text(
-            'Add page numbers locally. The original file stays unchanged.',
+          const ToolIntro(
+            text:
+                'Add page numbers locally. The original file stays unchanged.',
           ),
           OutlinedButton.icon(
             onPressed: _busy ? null : _pick,
             icon: const Icon(Icons.upload_file),
             label: const Text('Select PDF'),
           ),
-          if (_sourceName != null)
-            Text(
-              _pageCount > 0 ? '$_sourceName • $_pageCount pages' : _sourceName!,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+          const SizedBox(height: AppSpacing.md),
+          if (hasFile)
+            SelectedFileCard(
+              name: _sourceName!,
+              detail: _pageCount > 0 ? '$_pageCount pages' : null,
+              onReplace: _busy ? null : _pick,
+            )
+          else
+            ToolEmptyState(
+              icon: Icons.pin_outlined,
+              title: 'Select a PDF to number',
+              message: 'Then choose where the numbers should appear.',
+              onSelect: _busy ? null : _pick,
             ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<PageNumberFormat>(
-            initialValue: _format,
-            decoration: const InputDecoration(labelText: 'Format'),
-            items: const [
-              DropdownMenuItem(
-                value: PageNumberFormat.plain,
-                child: Text('1, 2, 3'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberFormat.page,
-                child: Text('Page 1'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberFormat.pageOfN,
-                child: Text('Page 1 of N'),
-              ),
-            ],
-            onChanged: _busy
-                ? null
-                : (v) => setState(() {
-                    _format = v!;
-                    _result = null;
-                  }),
-          ),
-          DropdownButtonFormField<PageNumberPosition>(
-            initialValue: _position,
-            decoration: const InputDecoration(labelText: 'Position'),
-            items: const [
-              DropdownMenuItem(
-                value: PageNumberPosition.bottomLeft,
-                child: Text('Bottom left'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberPosition.bottomCenter,
-                child: Text('Bottom center'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberPosition.bottomRight,
-                child: Text('Bottom right'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberPosition.topLeft,
-                child: Text('Top left'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberPosition.topCenter,
-                child: Text('Top center'),
-              ),
-              DropdownMenuItem(
-                value: PageNumberPosition.topRight,
-                child: Text('Top right'),
-              ),
-            ],
-            onChanged: _busy
-                ? null
-                : (v) => setState(() {
-                    _position = v!;
-                    _result = null;
-                  }),
-          ),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _start,
-                  enabled: !_busy,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Start number',
-                    border: OutlineInputBorder(),
+          const SizedBox(height: AppSpacing.lg),
+          ToolSection(
+              title: 'Format & position',
+              child: Column(
+                children: [
+                  DropdownButtonFormField<PageNumberFormat>(
+                    initialValue: _format,
+                    decoration: const InputDecoration(labelText: 'Format'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: PageNumberFormat.plain,
+                        child: Text('1, 2, 3'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberFormat.page,
+                        child: Text('Page 1'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberFormat.pageOfN,
+                        child: Text('Page 1 of N'),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() {
+                            _format = v!;
+                            _result = null;
+                          }),
                   ),
-                  onChanged: (_) => setState(() => _result = null),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _first,
-                  enabled: !_busy,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'First page',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButtonFormField<PageNumberPosition>(
+                    initialValue: _position,
+                    decoration: const InputDecoration(labelText: 'Position'),
+                    items: const [
+                      DropdownMenuItem(
+                        value: PageNumberPosition.bottomLeft,
+                        child: Text('Bottom left'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberPosition.bottomCenter,
+                        child: Text('Bottom center'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberPosition.bottomRight,
+                        child: Text('Bottom right'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberPosition.topLeft,
+                        child: Text('Top left'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberPosition.topCenter,
+                        child: Text('Top center'),
+                      ),
+                      DropdownMenuItem(
+                        value: PageNumberPosition.topRight,
+                        child: Text('Top right'),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() {
+                            _position = v!;
+                            _result = null;
+                          }),
                   ),
-                  onChanged: (_) => setState(() => _result = null),
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextField(
-                  controller: _last,
-                  enabled: !_busy,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Last page',
-                    border: OutlineInputBorder(),
+            ),
+            ToolSection(
+              title: 'Numbering',
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: _start,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Start number',
+                          ),
+                          onChanged: (_) => setState(() => _result = null),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: TextField(
+                          controller: _first,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'First page',
+                          ),
+                          onChanged: (_) => setState(() => _result = null),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: TextField(
+                          controller: _last,
+                          enabled: !_busy,
+                          keyboardType: TextInputType.number,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                          ],
+                          decoration: const InputDecoration(
+                            labelText: 'Last page',
+                          ),
+                          onChanged: (_) => setState(() => _result = null),
+                        ),
+                      ),
+                    ],
                   ),
-                  onChanged: (_) => setState(() => _result = null),
-                ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Font size: ${_fontSize.round()} pt',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _fontSize,
+                          min: 6,
+                          max: 72,
+                          divisions: 66,
+                          semanticFormatterCallback: (v) =>
+                              '${v.round()} points',
+                          onChanged: _busy
+                              ? null
+                              : (v) => setState(() {
+                                  _fontSize = v;
+                                  _result = null;
+                                }),
+                        ),
+                      ),
+                    ],
+                  ),
+                  DropdownButtonFormField<int>(
+                    initialValue: _color,
+                    decoration: const InputDecoration(labelText: 'Text color'),
+                    items: [
+                      for (final entry in _palette.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (v) => setState(() {
+                            _color = v!;
+                            _result = null;
+                          }),
+                  ),
+                ],
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text('Font size: ${_fontSize.round()} pt'),
-          Slider(
-            value: _fontSize,
-            min: 6,
-            max: 72,
-            divisions: 66,
-            onChanged: _busy
-                ? null
-                : (v) => setState(() {
-                    _fontSize = v;
-                    _result = null;
-                  }),
-          ),
-          DropdownButtonFormField<int>(
-            initialValue: _color,
-            decoration: const InputDecoration(labelText: 'Text color'),
-            items: [
-              for (final entry in _palette.entries)
-                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-            ],
-            onChanged: _busy
-                ? null
-                : (v) => setState(() {
-                    _color = v!;
-                    _result = null;
-                  }),
-          ),
+            ),
           TextField(
             controller: _filename,
             enabled: !_busy,
             decoration: const InputDecoration(labelText: 'Output filename'),
           ),
-          const SizedBox(height: 12),
-          if (_busy) const LinearProgressIndicator(),
-          if (_message != null)
-            Text(
-              _message!,
-              style: TextStyle(
-                color: _error ? Colors.red.shade700 : Colors.green.shade800,
-              ),
-            ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.md),
+          if (_busy) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (_message != null) ...[
+            ToolStatus(message: _message!, isError: _error),
+            const SizedBox(height: AppSpacing.md),
+          ],
           FilledButton.icon(
-            onPressed: _busy || _input == null ? null : _preview,
+            onPressed: _busy || !hasFile ? null : _preview,
             icon: const Icon(Icons.preview_outlined),
-            label: const Text('Preview numbered PDF'),
+            label: const Text('Preview & Save'),
           ),
         ],
       ),

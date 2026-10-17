@@ -4,6 +4,8 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../services/pdf_protect_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 class ProtectPdfPage extends StatefulWidget {
@@ -97,7 +99,10 @@ class _ProtectPdfPageState extends State<ProtectPdfPage> {
 
   Future<bool> _generate() async {
     if (_source == null || _busy) return false;
-    final validation = validatePdfPassword(_password.text, _confirmation.text);
+    final validation = validatePdfPassword(
+      _password.text,
+      _confirmation.text,
+    );
     if (validation != null) {
       _status(validation, error: true);
       return false;
@@ -113,9 +118,7 @@ class _ProtectPdfPageState extends State<ProtectPdfPage> {
       );
       if (!mounted) return false;
       setState(() => _result = result);
-      _status(
-        'Encrypted PDF verified. Ready to preview or save as a new file.',
-      );
+      _status('Encrypted PDF verified. Ready to preview or save as a new file.');
       return true;
     } on PdfProtectException catch (error) {
       _status(error.message, error: true);
@@ -154,7 +157,8 @@ class _ProtectPdfPageState extends State<ProtectPdfPage> {
           ? 'Save cancelled. Your encrypted PDF is still ready to save.'
           : 'Encrypted PDF saved successfully.';
     } catch (_) {
-      message = 'Save failed. Check the destination and available space, then try again.';
+      message =
+          'Save failed. Check the destination and available space, then try again.';
       failed = true;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -185,88 +189,114 @@ class _ProtectPdfPageState extends State<ProtectPdfPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Protect PDF')),
-    body: ListView(
-      padding: const EdgeInsets.all(16),
-      children: [
-        const Text(
-          'Encrypt a PDF privately on your device. The original stays unchanged.',
-        ),
-        OutlinedButton.icon(
-          onPressed: _busy ? null : _pick,
-          icon: const Icon(Icons.upload_file),
-          label: const Text('Select PDF'),
-        ),
-        if (_sourceName != null)
-          Text(_sourceName!, maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 16),
-        for (final entry in [
-          (_password, 'Password'),
-          (_confirmation, 'Confirm password'),
-        ])
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: TextField(
-              controller: entry.$1,
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasSource = _source != null;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Protect PDF')),
+      body: ListView(
+        padding: const EdgeInsets.all(AppSpacing.screen),
+        children: [
+          const ToolIntro(
+            text:
+                'Encrypt a PDF with a password. The original file stays unchanged.',
+          ),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _pick,
+            icon: const Icon(Icons.upload_file),
+            label: const Text('Select PDF'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (!hasSource)
+            ToolEmptyState(
+              icon: Icons.lock_outline,
+              title: 'Select a PDF to protect',
+              message: 'You will set a password on the next step.',
+              onSelect: _busy ? null : _pick,
+            )
+          else ...[
+            SelectedFileCard(
+              name: _sourceName!,
+              onReplace: _busy ? null : _pick,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            ToolSection(
+              title: 'Password',
+              subtitle: 'AES-256 encryption is applied locally.',
+              child: Column(
+                children: [
+                  for (final entry in [
+                    (_password, 'Password'),
+                    (_confirmation, 'Confirm password'),
+                  ])
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                      child: TextField(
+                        controller: entry.$1,
+                        enabled: !_busy,
+                        obscureText: _hidden,
+                        autocorrect: false,
+                        enableSuggestions: false,
+                        enableIMEPersonalizedLearning: false,
+                        keyboardType: TextInputType.visiblePassword,
+                        onChanged: _invalidate,
+                        decoration: InputDecoration(
+                          labelText: entry.$2,
+                          suffixIcon: IconButton(
+                            tooltip: _hidden
+                                ? 'Show passwords'
+                                : 'Hide passwords',
+                            onPressed: _busy
+                                ? null
+                                : () => setState(() => _hidden = !_hidden),
+                            icon: Icon(
+                              _hidden ? Icons.visibility : Icons.visibility_off,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Remember your password. Without it, the encrypted PDF '
+                      'may not be recoverable.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            TextField(
+              controller: _filename,
               enabled: !_busy,
-              obscureText: _hidden,
-              autocorrect: false,
-              enableSuggestions: false,
-              enableIMEPersonalizedLearning: false,
-              keyboardType: TextInputType.visiblePassword,
-              onChanged: _invalidate,
-              decoration: InputDecoration(
-                labelText: entry.$2,
-                suffixIcon: IconButton(
-                  tooltip: _hidden ? 'Show passwords' : 'Hide passwords',
-                  onPressed: _busy
-                      ? null
-                      : () => setState(() => _hidden = !_hidden),
-                  icon: Icon(_hidden ? Icons.visibility : Icons.visibility_off),
-                ),
-              ),
+              decoration: const InputDecoration(labelText: 'Output filename'),
             ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (_busy) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (_message != null) ...[
+            ToolStatus(message: _message!, isError: _error),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          FilledButton.icon(
+            onPressed: _busy || !hasSource ? null : _preview,
+            icon: const Icon(Icons.preview_outlined),
+            label: const Text('Protect & Preview'),
           ),
-        const Text(
-          'Remember your password. Without it, the encrypted PDF may not be recoverable.',
-        ),
-        const SizedBox(height: 8),
-        const Text(
-          'AES-256 encryption. Requires a PDF reader supporting PDF 1.7 extension level 8 or PDF 2.0. Use 1–127 printable English letters, numbers, spaces or symbols. Signed or already encrypted PDFs are not supported.',
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _filename,
-          enabled: !_busy,
-          decoration: const InputDecoration(
-            labelText: 'Output filename',
-            isDense: true,
+          const SizedBox(height: AppSpacing.sm),
+          OutlinedButton.icon(
+            onPressed: _busy || !hasSource ? null : _save,
+            icon: const Icon(Icons.save_outlined),
+            label: const Text('Save PDF'),
           ),
-        ),
-        const SizedBox(height: 16),
-        if (_busy) const LinearProgressIndicator(),
-        if (_message != null)
-          Semantics(
-            liveRegion: true,
-            child: Text(
-              _message!,
-              style: TextStyle(
-                color: _error ? Colors.red.shade700 : Colors.green.shade800,
-              ),
-            ),
-          ),
-        FilledButton.icon(
-          onPressed: _busy || _source == null ? null : _preview,
-          icon: const Icon(Icons.preview_outlined),
-          label: const Text('Preview PDF'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _busy || _source == null ? null : _save,
-          icon: const Icon(Icons.save_outlined),
-          label: const Text('Save PDF'),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }

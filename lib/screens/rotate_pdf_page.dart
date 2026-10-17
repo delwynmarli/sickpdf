@@ -9,6 +9,8 @@ import 'package:flutter/rendering.dart' show ScrollCacheExtent;
 import '../services/pdf_organize_service.dart';
 import '../services/pdf_rotate_service.dart';
 import '../services/pdf_split_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 class RotatePdfPage extends StatefulWidget {
@@ -184,12 +186,13 @@ class _RotatePdfPageState extends State<RotatePdfPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Rotate PDF')),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Rotate pages privately on your device. The original stays unchanged.',
+            const ToolIntro(
+              text:
+                  'Rotate selected pages by 90°. The original stays unchanged.',
             ),
             OutlinedButton.icon(
               onPressed: _busy ? null : _pick,
@@ -197,12 +200,19 @@ class _RotatePdfPageState extends State<RotatePdfPage> {
               label: const Text('Select PDF'),
             ),
             if (_sourceName != null)
-              Text(
-                '$_sourceName • $count pages',
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+              Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Text(
+                  '$_sourceName • $count pages',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
             if (count > 0) ...[
+              const SizedBox(height: AppSpacing.xs),
               Text('${_selected.length} pages selected'),
               Wrap(
                 spacing: 8,
@@ -290,17 +300,15 @@ class _RotatePdfPageState extends State<RotatePdfPage> {
                       ),
                     ),
             ),
-            if (_busy) const LinearProgressIndicator(),
-            if (_message != null)
-              Semantics(
-                liveRegion: true,
-                child: Text(
-                  _message!,
-                  style: TextStyle(
-                    color: _error ? Colors.red.shade700 : Colors.green.shade800,
-                  ),
-                ),
-              ),
+            if (_busy) ...[
+              const SizedBox(height: AppSpacing.xs),
+              const LinearProgressIndicator(),
+            ],
+            if (_message != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              ToolStatus(message: _message!, isError: _error),
+            ],
+            const SizedBox(height: AppSpacing.xs),
             TextField(
               controller: _filename,
               enabled: !_busy,

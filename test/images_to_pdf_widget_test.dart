@@ -58,7 +58,7 @@ void main() {
     expect(find.textContaining('coming soon'), findsNothing);
     expect(find.text('Select images'), findsOneWidget);
     // Empty selection: the conversion actions are hidden until images exist.
-    expect(find.text('Preview PDF'), findsNothing);
+    expect(find.text('Preview & Save'), findsNothing);
     expect(find.text('Save PDF'), findsNothing);
   });
 

@@ -7,15 +7,23 @@ import 'package:pdf_combiner/models/merge_input.dart';
 import 'package:pdf_combiner/pdf_combiner.dart';
 
 class PdfMergeService {
+  /// Merges [inputPaths] and returns the output bytes.
+  ///
+  /// A private temporary output file is created and always deleted, so callers
+  /// never manage temp paths and the user's original files are never touched.
+  /// [outputPath] may be supplied by tests to control the destination.
   Future<Uint8List> merge({
     required List<String> inputPaths,
-    required String outputPath,
+    String? outputPath,
   }) async {
     if (inputPaths.length < 2) {
       throw const FormatException('Select at least two PDF files to merge.');
     }
 
-    final temporaryFile = File(outputPath);
+    final temporaryFile = File(
+      outputPath ??
+          '${Directory.systemTemp.path}${Platform.pathSeparator}sickpdf_merge_${DateTime.now().microsecondsSinceEpoch}.pdf',
+    );
     developer.log(
       'Merging ${inputPaths.length} local PDF files.',
       name: 'sickpdf.merge',
@@ -36,7 +44,7 @@ class PdfMergeService {
       }
       await PdfCombiner.mergeMultiplePDFs(
         inputs: inputPaths.map(MergeInput.path).toList(),
-        outputPath: outputPath,
+        outputPath: temporaryFile.path,
       );
       if (!await temporaryFile.exists()) {
         throw const FileSystemException('The PDF was not created.');

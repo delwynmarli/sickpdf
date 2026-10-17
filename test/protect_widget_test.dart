@@ -120,11 +120,13 @@ void main() {
   }
 
   testWidgets('home entry opens Protect with exports disabled', (tester) async {
-    tester.view.physicalSize = const Size(430, 1200);
+    // Tall viewport keeps every grid tile built so the target is tappable.
+    tester.view.physicalSize = const Size(430, 3600);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Protect PDF'));
     await tester.tap(find.text('Protect PDF'));
     await tester.pumpAndSettle();
@@ -140,7 +142,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Preview PDF'),
+            find.widgetWithText(FilledButton, 'Protect & Preview'),
           )
           .onPressed,
       isNull,

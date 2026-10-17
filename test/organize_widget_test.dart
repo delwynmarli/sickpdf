@@ -12,6 +12,13 @@ void main() {
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
       await tester.pumpWidget(const MyApp());
+      await tester.pumpAndSettle();
+      await tester.dragUntilVisible(
+        find.text('Organize PDF'),
+        find.byType(CustomScrollView),
+        const Offset(0, -200),
+      );
+      await tester.pumpAndSettle();
       await tester.tap(find.text('Organize PDF'));
       await tester.pumpAndSettle();
       expect(find.byType(OrganizePdfPage), findsOneWidget);

@@ -61,7 +61,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Preview numbered PDF'),
+            find.widgetWithText(FilledButton, 'Preview & Save'),
           )
           .onPressed,
       isNull,
@@ -102,6 +102,10 @@ void main() {
     final picker = _Picker();
     FilePicker.platform = picker;
     addTearDown(() => FilePicker.platform = _Picker());
+    tester.view.physicalSize = const Size(430, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MaterialApp(home: PageNumbersPdfPage()));
     await tester.tap(find.text('Select PDF'));
     await tester.pumpAndSettle();

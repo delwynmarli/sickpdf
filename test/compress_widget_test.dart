@@ -12,11 +12,18 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MyApp());
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('Compress PDF'),
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Compress PDF'));
     await tester.pumpAndSettle();
     expect(find.byType(CompressPdfPage), findsOneWidget);
     expect(find.textContaining('coming soon'), findsNothing);
-    expect(find.text('Compression preset'), findsOneWidget);
+    expect(find.text('Compression level'), findsOneWidget);
     expect(
       tester
           .widget<OutlinedButton>(

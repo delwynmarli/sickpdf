@@ -1,16 +1,16 @@
 import 'dart:developer' as developer;
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../services/pdf_split_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
-
-const _navy = Color(0xFF0B172A);
 
 class SplitPdfPage extends StatefulWidget {
   const SplitPdfPage({super.key});
@@ -39,6 +39,7 @@ class _SplitPdfPageState extends State<SplitPdfPage> {
   }
 
   void _invalidate() {
+    if (!mounted) return;
     setState(() {
       _result = null;
       _resultName = null;
@@ -50,6 +51,7 @@ class _SplitPdfPageState extends State<SplitPdfPage> {
   void dispose() {
     _start.dispose();
     _end.dispose();
+    _result = null;
     super.dispose();
   }
 
@@ -170,7 +172,8 @@ class _SplitPdfPageState extends State<SplitPdfPage> {
           : 'PDF saved successfully.';
     } catch (error, stack) {
       _log('Save', error, stack);
-      message = 'Save failed. Check the destination and available space, then try again.';
+      message =
+          'Save failed. Check the destination and available space, then try again.';
       failed = true;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -184,110 +187,105 @@ class _SplitPdfPageState extends State<SplitPdfPage> {
     if (_busy || bytes == null) return;
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (_) =>
-            PdfOutputPreview(bytes: bytes, name: _resultName!, onSave: _save),
+        builder: (_) => PdfOutputPreview(bytes: bytes, name: _resultName!, onSave: _save),
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasFile = _file != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Split PDF'), foregroundColor: _navy),
+      appBar: AppBar(title: const Text('Split PDF')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         children: [
-          const Text(
-            'Extract pages privately on your device.',
-            style: TextStyle(color: _navy, fontSize: 16),
+          const ToolIntro(
+            text:
+                'Extract a page range into a new PDF. The original file stays unchanged.',
           ),
-          const SizedBox(height: 18),
           OutlinedButton.icon(
             onPressed: _busy ? null : _pick,
             icon: const Icon(Icons.upload_file),
             label: const Text('Select PDF'),
           ),
-          if (_file != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              child: ListTile(
-                leading: const Icon(Icons.picture_as_pdf, color: _navy),
-                title: Text(_file!.name),
-                subtitle: Text('$_pageCount pages'),
+          const SizedBox(height: AppSpacing.xl),
+          if (!hasFile)
+            ToolEmptyState(
+              icon: Icons.call_split,
+              title: 'Select one PDF to begin',
+              message: 'Then choose the pages you want to keep.',
+              onSelect: _busy ? null : _pick,
+            )
+          else ...[
+            SelectedFileCard(
+              name: _file!.name,
+              detail: '$_pageCount pages',
+              onReplace: _busy ? null : _pick,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            ToolSection(
+              title: 'Page range (inclusive)',
+              subtitle: 'Earlier and later pages are left out of the new PDF.',
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _start,
+                      enabled: !_busy,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'Start page'),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: TextField(
+                      controller: _end,
+                      enabled: !_busy,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(labelText: 'End page'),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'Page range (inclusive)',
-              style: TextStyle(fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _start,
-                    enabled: !_busy,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Start page',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _end,
-                    enabled: !_busy,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'End page',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
           ],
-          const SizedBox(height: 20),
-          if (_busy) const LinearProgressIndicator(),
+          const SizedBox(height: AppSpacing.xl),
+          if (_busy) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: AppSpacing.xl),
+          ],
           if (_message != null) ...[
-            const SizedBox(height: 12),
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                _message!,
-                style: TextStyle(
-                  color: _error ? Colors.red.shade700 : Colors.green.shade800,
+            ToolStatus(message: _message!, isError: _error),
+            const SizedBox(height: AppSpacing.xl),
+          ],
+          FilledButton.icon(
+            onPressed: _busy || !hasFile ? null : _split,
+            icon: const Icon(Icons.call_split),
+            label: Text(_busy ? 'Processing…' : 'Split PDF'),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy || _result == null ? null : _preview,
+                  icon: const Icon(Icons.preview_outlined),
+                  label: const Text('Preview'),
                 ),
               ),
-            ),
-          ],
-          const SizedBox(height: 12),
-          FilledButton.icon(
-            onPressed: _busy || _file == null ? null : _split,
-            style: FilledButton.styleFrom(
-              backgroundColor: _navy,
-              foregroundColor: Colors.white,
-            ),
-            icon: const Icon(Icons.call_split),
-            label: Text(_busy ? 'Processing...' : 'Split PDF'),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _busy || _result == null ? null : _save,
+                  icon: const Icon(Icons.save_outlined),
+                  label: const Text('Save PDF'),
+                ),
+              ),
+            ],
           ),
-          if (_result != null) ...[
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _preview,
-              icon: const Icon(Icons.preview_outlined),
-              label: const Text('Preview PDF'),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _save,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save PDF'),
-            ),
-          ],
         ],
       ),
     );

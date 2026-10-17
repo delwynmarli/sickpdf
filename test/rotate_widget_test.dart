@@ -132,7 +132,13 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(const MyApp());
-    await tester.ensureVisible(find.text('Rotate PDF'));
+    await tester.pumpAndSettle();
+    await tester.dragUntilVisible(
+      find.text('Rotate PDF'),
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Rotate PDF'));
     await tester.pumpAndSettle();
     expect(find.byType(RotatePdfPage), findsOneWidget);

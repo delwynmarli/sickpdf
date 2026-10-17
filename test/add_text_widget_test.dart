@@ -73,7 +73,7 @@ void main() {
     expect(
       tester
           .widget<FilledButton>(
-            find.widgetWithText(FilledButton, 'Preview PDF with text'),
+            find.widgetWithText(FilledButton, 'Preview & Save'),
           )
           .onPressed,
       isNull,
@@ -112,7 +112,7 @@ void main() {
     expect(find.textContaining('3 pages'), findsOneWidget);
 
     // Empty text is rejected before any processing is requested.
-    await tester.tap(find.text('Preview PDF with text'));
+    await tester.tap(find.text('Preview & Save'));
     await tester.pumpAndSettle();
     expect(find.text('Enter the text to add.'), findsOneWidget);
     expect(service.calls, 0);
@@ -124,7 +124,7 @@ void main() {
       '  Hello PDF  ',
     );
     await tester.pump();
-    await tester.tap(find.text('Preview PDF with text'));
+    await tester.tap(find.text('Preview & Save'));
     await tester.pumpAndSettle();
     expect(service.calls, 1);
     expect(service.lastOptions!.pages, isNull);
@@ -141,7 +141,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Apply to every page'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Preview PDF with text'));
+    await tester.tap(find.text('Preview & Save'));
     await tester.pumpAndSettle();
     expect(service.calls, 2);
     expect(service.lastOptions!.pages, {0});

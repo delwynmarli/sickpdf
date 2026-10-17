@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:sickpdf/main.dart';
+import 'package:sickpdf/screens/merge_pdf_page.dart';
 import 'package:sickpdf/screens/split_pdf_page.dart';
 
 void main() {
@@ -19,7 +20,7 @@ void main() {
     expect(find.byType(SnackBar), findsNothing);
     expect(find.textContaining('coming soon'), findsNothing);
     expect(
-      find.text('Extract pages privately on your device.'),
+      find.textContaining('Extract a page range into a new PDF.'),
       findsOneWidget,
     );
     expect(find.text('Select PDF'), findsOneWidget);
@@ -27,7 +28,11 @@ void main() {
       find.widgetWithText(OutlinedButton, 'Select PDF'),
     );
     expect(picker.onPressed, isNotNull);
-    expect(find.text('Save PDF'), findsNothing);
+    // Actions are always visible but disabled until an input is selected.
+    final save = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, 'Save PDF'),
+    );
+    expect(save.onPressed, isNull);
     final action = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Split PDF'),
     );
@@ -43,9 +48,9 @@ void main() {
   ) async {
     await tester.pumpWidget(const MyApp());
 
-    expect(find.text('sickPDF'), findsOneWidget);
-    expect(find.text('Your files stay yours.'), findsOneWidget);
-    expect(find.text('100% OFFLINE'), findsOneWidget);
+    expect(find.bySemanticsLabel('sickPDF'), findsOneWidget);
+    expect(find.text('Your PDFs, handled.'), findsOneWidget);
+    expect(find.text('Offline'), findsOneWidget);
     expect(find.text('Merge PDF'), findsOneWidget);
   });
   testWidgets('Merge screen exposes merge controls and reorder guidance', (

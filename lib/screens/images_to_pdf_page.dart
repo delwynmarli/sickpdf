@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../services/pdf_image_to_pdf_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 /// Editable, ordered list of images plus the layout options shared with
@@ -276,28 +278,24 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('Image to PDF')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         children: [
-          const Text(
-            'Turn photos and images into a PDF privately on your device. The original images are never changed.',
+          const ToolIntro(
+            text:
+                'Turn photos and images into a PDF. The original images are never changed.',
           ),
-          const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _busy ? null : _pick,
             icon: const Icon(Icons.add_photo_alternate_outlined),
             label: const Text('Select images'),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: AppSpacing.md),
           if (_selection.isEmpty)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 24),
-              child: Center(
-                child: Text(
-                  'No images selected yet.\nChoose one or more JPEG or PNG files.',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
+            ToolEmptyState(
+              icon: Icons.image_outlined,
+              title: 'No images selected yet',
+              message: 'Choose one or more JPEG or PNG files.',
+              onSelect: _busy ? null : _pick,
             )
           else ...[
             Text(
@@ -489,20 +487,12 @@ class _ImagesToPdfPageState extends State<ImagesToPdfPage> {
             ),
           ],
           if (_busy) ...[
-            const SizedBox(height: 16),
+            const SizedBox(height: AppSpacing.md),
             const LinearProgressIndicator(),
           ],
           if (_message != null) ...[
-            const SizedBox(height: 12),
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                _message!,
-                style: TextStyle(
-                  color: _error ? Colors.red.shade700 : Colors.green.shade800,
-                ),
-              ),
-            ),
+            const SizedBox(height: AppSpacing.md),
+            ToolStatus(message: _message!, isError: _error),
           ],
         ],
       ),

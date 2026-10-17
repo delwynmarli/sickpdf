@@ -1,28 +1,13 @@
-import 'dart:developer' as developer;
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:pdfrx/pdfrx.dart';
 
-import 'services/pdf_merge_service.dart';
-import 'screens/split_pdf_page.dart';
-import 'screens/organize_pdf_page.dart';
-import 'screens/compress_pdf_page.dart';
-import 'screens/rotate_pdf_page.dart';
-import 'screens/protect_pdf_page.dart';
-import 'screens/unlock_pdf_page.dart';
-import 'screens/watermark_pdf_page.dart';
-import 'screens/page_numbers_pdf_page.dart';
-import 'screens/sign_pdf_page.dart';
-import 'screens/add_text_pdf_page.dart';
-import 'screens/images_to_pdf_page.dart';
-
-const _navy = Color(0xFF0B172A);
-const _navyLight = Color(0xFF14243D);
-const _green = Color(0xFF45D483);
-const _background = Color(0xFFF6F8FA);
+import 'navigation/tool_catalog.dart';
+import 'services/document_library.dart';
+import 'services/theme_preferences.dart';
+import 'theme/app_theme.dart';
 
 void main() {
   runApp(const MyApp());
@@ -32,27 +17,50 @@ class MyApp extends SickPdfApp {
   const MyApp({super.key});
 }
 
-class SickPdfApp extends StatelessWidget {
+/// Root widget. Loads the persisted appearance preference before building so
+/// the first frame already uses the saved theme (default: light).
+class SickPdfApp extends StatefulWidget {
   const SickPdfApp({super.key});
+
+  @override
+  State<SickPdfApp> createState() => _SickPdfAppState();
+}
+
+class _SickPdfAppState extends State<SickPdfApp> {
+  final _prefs = ThemePreferences();
+  ThemeMode? _themeMode;
+
+  @override
+  void initState() {
+    super.initState();
+    _prefs.load().then((mode) {
+      if (mounted) setState(() => _themeMode = mode);
+    });
+  }
+
+  Future<void> _setThemeMode(ThemeMode mode) async {
+    setState(() => _themeMode = mode);
+    await _prefs.save(mode);
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'sickPDF',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: _green),
-        scaffoldBackgroundColor: _background,
-        useMaterial3: true,
-        fontFamily: 'sans',
-      ),
-      home: const AppShell(),
+      theme: buildAppTheme(Brightness.light),
+      darkTheme: buildAppTheme(Brightness.dark),
+      // Defaults to light until the saved preference resolves.
+      themeMode: _themeMode ?? ThemeMode.light,
+      home: AppShell(onThemeModeChanged: _setThemeMode),
     );
   }
 }
 
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, this.onThemeModeChanged});
+
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -63,16 +71,23 @@ class _AppShellState extends State<AppShell> {
 
   @override
   Widget build(BuildContext context) {
-    final pages = [const HomePage(), const ToolsPage(), const SettingsPage()];
+    // IndexedStack keeps each tab's state alive so switching tabs never
+    // loses in-progress work or forces rebuilds.
+    final pages = <Widget>[
+      const HomePage(),
+      const FilesPage(),
+      SettingsPage(onThemeModeChanged: widget.onThemeModeChanged),
+    ];
 
     return Scaffold(
-      body: SafeArea(child: pages[_selectedIndex]),
+      body: SafeArea(
+        bottom: false,
+        child: IndexedStack(index: _selectedIndex, children: pages),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) =>
             setState(() => _selectedIndex = index),
-        backgroundColor: Colors.white,
-        indicatorColor: _green.withValues(alpha: 0.18),
         destinations: const [
           NavigationDestination(
             icon: Icon(Icons.home_outlined),
@@ -80,9 +95,9 @@ class _AppShellState extends State<AppShell> {
             label: 'Home',
           ),
           NavigationDestination(
-            icon: Icon(Icons.grid_view_outlined),
-            selectedIcon: Icon(Icons.grid_view),
-            label: 'Tools',
+            icon: Icon(Icons.folder_outlined),
+            selectedIcon: Icon(Icons.folder),
+            label: 'Files',
           ),
           NavigationDestination(
             icon: Icon(Icons.settings_outlined),
@@ -95,161 +110,220 @@ class _AppShellState extends State<AppShell> {
   }
 }
 
+/// Home: purpose, primary actions, and all tools grouped by intent.
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final groups = kGroupedTools;
     return CustomScrollView(
       slivers: [
+        const SliverToBoxAdapter(child: _HomeHeader()),
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 24, 20, 0),
-          sliver: SliverToBoxAdapter(child: _Header()),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 28, 20, 0),
+          padding: const EdgeInsets.fromLTRB(
+            AppSpacing.screen,
+            AppSpacing.md,
+            AppSpacing.screen,
+            0,
+          ),
           sliver: SliverToBoxAdapter(
-            child: Text(
-              'Tools',
-              style: Theme.of(context).textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800, color: _navy),
+            child: _SectionTitle(
+              title: 'All tools',
+              subtitle: 'Everything works offline on your device.',
+              trailing: '${kTools.length} tools',
             ),
           ),
         ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-          sliver: SliverGrid.count(
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 1.25,
-            children: const [
-              ToolCard(
-                icon: Icons.merge_type,
-                title: 'Merge PDF',
-                accent: true,
-              ),
-              ToolCard(icon: Icons.call_split, title: 'Split PDF'),
-              ToolCard(icon: Icons.compress, title: 'Compress PDF'),
-              ToolCard(icon: Icons.reorder, title: 'Organize PDF'),
-              ToolCard(icon: Icons.rotate_right, title: 'Rotate PDF'),
-              ToolCard(icon: Icons.lock_outline, title: 'Protect PDF'),
-              ToolCard(icon: Icons.lock_open_outlined, title: 'Unlock PDF'),
-              ToolCard(icon: Icons.water_drop_outlined, title: 'Watermark PDF'),
-              ToolCard(icon: Icons.pin_outlined, title: 'Page Numbers PDF'),
-              ToolCard(icon: Icons.image_outlined, title: 'Image to PDF'),
-              ToolCard(icon: Icons.draw_outlined, title: 'Sign PDF'),
-              ToolCard(icon: Icons.text_fields_outlined, title: 'Add Text to PDF'),
-            ],
-          ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 30, 20, 14),
-          sliver: SliverToBoxAdapter(
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Recent files',
-                  style: Theme.of(context).textTheme.titleLarge
-                      ?.copyWith(fontWeight: FontWeight.w800, color: _navy),
-                ),
-                Text(
-                  '0 files',
-                  style: Theme.of(context).textTheme.bodySmall
-                      ?.copyWith(color: Colors.grey.shade600),
-                ),
-              ],
+        for (final entry in groups.entries) ...[
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.screen,
+              AppSpacing.lg,
+              AppSpacing.screen,
+              AppSpacing.xxs,
+            ),
+            sliver: SliverToBoxAdapter(
+              child: _GroupLabel(label: entry.key.label),
             ),
           ),
-        ),
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(20, 0, 20, 30),
-          sliver: SliverToBoxAdapter(child: _EmptyRecentFiles()),
-        ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.screen),
+            sliver: SliverToBoxAdapter(
+              child: _ToolGroupList(tools: entry.value),
+            ),
+          ),
+        ],
+        const SliverToBoxAdapter(child: SizedBox(height: AppSpacing.xxl)),
       ],
     );
   }
 }
 
-class _Header extends StatelessWidget {
+/// One group rendered as a container of rows — clean list, not a grid of
+/// identical icon tiles. Light theme uses a soft shadow; dark theme keeps a
+/// visible hairline border.
+class _ToolGroupList extends StatelessWidget {
+  const _ToolGroupList({required this.tools});
+
+  final List<ToolDefinition> tools;
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final border = theme.colorScheme.outlineVariant;
+    final isLight = theme.brightness == Brightness.light;
     return Container(
-      padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: _navy,
-        borderRadius: BorderRadius.circular(26),
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.md),
+        border: isLight ? null : Border.all(color: border),
+        boxShadow: isLight
+            ? [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ]
+            : null,
       ),
+      clipBehavior: Clip.antiAlias,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          for (var i = 0; i < tools.length; i++) ...[
+            if (i > 0) Divider(height: 1, color: border),
+            _ToolRow(tool: tools[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ToolRow extends StatelessWidget {
+  const _ToolRow({required this.tool});
+
+  final ToolDefinition tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: '${tool.name}. ${tool.description}',
+      child: InkWell(
+        onTap: () => Navigator.of(context).push(tool.route()),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm + 2,
+          ),
+          child: Row(
             children: [
               Container(
-                width: 42,
-                height: 42,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
-                  color: _green,
-                  borderRadius: BorderRadius.circular(13),
+                  color: tool.effectiveAccent().withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(AppRadius.sm),
                 ),
-                child: const Icon(Icons.picture_as_pdf, color: _navy, size: 24),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'sickPDF',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 25,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: -0.5,
-                  ),
+                child: Icon(
+                  tool.icon,
+                  size: 22,
+                  color: tool.effectiveAccent(),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Row(
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Icon(Icons.lock_outline, size: 13, color: _green),
-                    SizedBox(width: 5),
                     Text(
-                      '100% OFFLINE',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.4,
+                      tool.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 1),
+                    Text(
+                      tool.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: AppSpacing.xs),
+              Icon(
+                Icons.chevron_right,
+                size: 20,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ],
           ),
-          const SizedBox(height: 24),
-          const Text(
-            'Your files stay yours.',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 25,
+        ),
+      ),
+    );
+  }
+}
+
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.teal.withValues(alpha: 0.08),
+            AppColors.teal.withValues(alpha: 0.0),
+          ],
+        ),
+        borderRadius: const BorderRadius.vertical(bottom: Radius.circular(AppRadius.lg)),
+      ),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screen,
+        AppSpacing.lg,
+        AppSpacing.screen,
+        AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _Wordmark(),
+              _OfflineBadge(),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Your PDFs, handled.',
+            style: theme.textTheme.headlineMedium?.copyWith(
               fontWeight: FontWeight.w700,
-              height: 1.1,
+              letterSpacing: -0.5,
+              height: 1.15,
             ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            'Simple PDF tools that work privately on your device.',
-            style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
-              fontSize: 14,
+            'Merge, split, sign, and protect — offline, on your device. '
+            'Files are never uploaded.',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
               height: 1.4,
             ),
           ),
@@ -259,151 +333,189 @@ class _Header extends StatelessWidget {
   }
 }
 
-class ToolCard extends StatelessWidget {
-  const ToolCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    this.accent = false,
-  });
-  final IconData icon;
-  final String title;
-  final bool accent;
+/// Text-only wordmark: precise, monochrome-safe, no decorative container.
+class _Wordmark extends StatelessWidget {
+  const _Wordmark();
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
-      button: true,
-      label:
-          title == 'Merge PDF' ||
-              title == 'Split PDF' ||
-              title == 'Organize PDF' ||
-              title == 'Compress PDF' ||
-              title == 'Rotate PDF' ||
-              title == 'Protect PDF' ||
-              title == 'Unlock PDF' ||
-              title == 'Watermark PDF' ||
-              title == 'Page Numbers PDF' ||
-              title == 'Sign PDF' ||
-              title == 'Add Text to PDF' ||
-              title == 'Image to PDF'
-          ? title
-          : '$title, coming soon',
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: () {
-          if (title == 'Merge PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const MergePdfPage()),
-            );
-            return;
-          }
-          if (title == 'Split PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SplitPdfPage()),
-            );
-            return;
-          }
-          if (title == 'Compress PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const CompressPdfPage()),
-            );
-            return;
-          }
-          if (title == 'Rotate PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const RotatePdfPage()),
-            );
-            return;
-          }
-          if (title == 'Protect PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const ProtectPdfPage()),
-            );
-            return;
-          }
-          if (title == 'Unlock PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const UnlockPdfPage()),
-            );
-            return;
-          }
-          if (title == 'Watermark PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const WatermarkPdfPage()),
-            );
-            return;
-          }
-          if (title == 'Page Numbers PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const PageNumbersPdfPage(),
-              ),
-            );
-            return;
-          }
-          if (title == 'Organize PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const OrganizePdfPage()),
-            );
-            return;
-          }
-          if (title == 'Image to PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) => const ImagesToPdfPage(),
-              ),
-            );
-            return;
-          }
-          if (title == 'Sign PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SignPdfPage()),
-            );
-            return;
-          }
-          if (title == 'Add Text to PDF') {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const AddTextPdfPage()),
-            );
-            return;
-          }
-          ScaffoldMessenger.of(context)
-              .showSnackBar(SnackBar(content: Text('$title is coming soon.')));
-        },
-        child: Ink(
-          decoration: BoxDecoration(
-            color: accent ? _navyLight : Colors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: accent ? _navyLight : const Color(0xFFE8EDF2),
+    final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
+    return Text.rich(
+      TextSpan(
+        text: 'sick',
+        style: theme.textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w700,
+          letterSpacing: -0.4,
+          color: onSurface,
+        ),
+        children: [
+          TextSpan(
+            text: 'PDF',
+            style: theme.textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+              letterSpacing: -0.4,
+              color: theme.colorScheme.primary,
             ),
           ),
+        ],
+      ),
+      semanticsLabel: 'sickPDF',
+    );
+  }
+}
+
+class _OfflineBadge extends StatelessWidget {
+  const _OfflineBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceMuted,
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.lock_outline,
+            size: 13,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          const SizedBox(width: AppSpacing.xxs),
+          Text(
+            'Offline',
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _GroupLabel extends StatelessWidget {
+  const _GroupLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      header: true,
+      child: Text(
+        label,
+        style: theme.textTheme.labelLarge?.copyWith(
+          color: theme.colorScheme.onSurface,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle({
+    required this.title,
+    this.subtitle,
+    this.trailing,
+  });
+
+  final String title;
+  final String? subtitle;
+  final String? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (subtitle != null)
+                Text(
+                  subtitle!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+          ),
+        ),
+        if (trailing != null)
+          Text(
+            trailing!,
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// A single tool entry point kept for external callers (tests, previews).
+class ToolCard extends StatelessWidget {
+  const ToolCard({super.key, required this.tool});
+
+  final ToolDefinition tool;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Semantics(
+      button: true,
+      label: '${tool.name}. ${tool.description}',
+      child: Card(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          onTap: () => Navigator.of(context).push(tool.route()),
           child: Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(AppSpacing.sm),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Icon(icon, color: accent ? _green : _navy, size: 27),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: TextStyle(
-                          color: accent ? Colors.white : _navy,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
+                Icon(tool.icon, size: 22, color: theme.colorScheme.primary),
+                const Spacer(),
+                Text(
+                  tool.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Flexible(
+                  child: Text(
+                    tool.description,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                      height: 1.2,
                     ),
-                    Icon(
-                      Icons.arrow_forward,
-                      size: 17,
-                      color: accent ? _green : Colors.grey.shade500,
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -414,348 +526,269 @@ class ToolCard extends StatelessWidget {
   }
 }
 
-class _EmptyRecentFiles extends StatelessWidget {
+/// Files tab: documents sickPDF itself created and saved to the library.
+///
+/// Honest scope — this lists only app-managed documents. It never scans
+/// device storage, and removing an entry never touches a user source file.
+class FilesPage extends StatefulWidget {
+  const FilesPage({super.key});
+
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 28),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE8EDF2)),
+  State<FilesPage> createState() => _FilesPageState();
+}
+
+class _FilesPageState extends State<FilesPage> {
+  late final _library = DocumentLibrary();
+  List<LibraryDocument>? _docs;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _refresh();
+  }
+
+  Future<void> _refresh() async {
+    final docs = await _library.list();
+    if (!mounted) return;
+    setState(() => _docs = docs);
+  }
+
+  Future<void> _open(LibraryDocument doc) async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: Text(doc.fileName)),
+          body: PdfViewer.file(
+            doc.storedPath,
+            params: PdfViewerParams(
+              errorBannerBuilder: (context, error, stackTrace, documentRef) =>
+                  const Center(
+                    child: Text(
+                      'This document could not be opened. It may have been '
+                      'moved or removed by the system.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+            ),
+          ),
+        ),
       ),
-      child: Column(
-        children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: _green.withValues(alpha: 0.14),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(
-              Icons.folder_open_outlined,
-              color: _navy,
-              size: 25,
-            ),
+    );
+  }
+
+  Future<void> _delete(LibraryDocument doc) async {
+    final theme = Theme.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Remove document?'),
+        content: Text(
+          '"${doc.fileName}" will be removed from the sickPDF library. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(height: 12),
-          const Text(
-            'No recent files',
-            style: TextStyle(
-              color: _navy,
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            'Your processed PDFs will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Remove'),
           ),
         ],
       ),
     );
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    await _library.remove(doc);
+    if (!mounted) return;
+    setState(() => _busy = false);
+    await _refresh();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('"${doc.fileName}" removed.')),
+    );
   }
-}
 
-class ToolsPage extends StatelessWidget {
-  const ToolsPage({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Text(
-      'Tools',
-      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: _navy),
-    ),
-  );
-}
-
-class MergePdfPage extends StatefulWidget {
-  const MergePdfPage({super.key});
-
-  @override
-  State<MergePdfPage> createState() => _MergePdfPageState();
-}
-
-class _MergePdfPageState extends State<MergePdfPage> {
-  final _mergeService = PdfMergeService();
-  final List<PlatformFile> _files = [];
-  bool _isBusy = false;
-  Uint8List? _mergedPdf;
-  String? _statusMessage;
-  bool _statusIsError = false;
-
-  Future<void> _pickFiles() async {
-    if (_isBusy) return;
-    setState(() => _isBusy = true);
+  Future<void> _importFile() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    var message = 'Import cancelled.';
     try {
       final result = await FilePicker.platform.pickFiles(
-        allowMultiple: true,
         type: FileType.custom,
         allowedExtensions: ['pdf'],
         withData: false,
       );
-      if (!mounted || result == null) return;
-      final validFiles = result.files
-          .where((file) => file.path != null)
-          .toList();
-      setState(() {
-        for (final file in validFiles) {
-          if (!_files.any((existing) => existing.path == file.path)) {
-            _mergedPdf = null;
-            _statusMessage = null;
-            _files.add(file);
-          }
-        }
-      });
-      if (validFiles.isEmpty && result.files.isNotEmpty) {
-        _setStatus(
-          'The selected files could not be accessed. Please try again.',
-        );
+      final path = result?.files.single.path;
+      if (path != null) {
+        await _library.addFromPath(path);
+        message = 'Added to library.';
       }
-    } catch (error) {
-      developer.log(
-        'File selection failed (${error.runtimeType}).',
-        name: 'sickpdf.merge',
-      );
-      if (mounted) {
-        _setStatus('Could not open the file picker. Please try again.');
-      }
+    } catch (_) {
+      message = 'Could not import the file. Please try again.';
     } finally {
-      if (mounted) setState(() => _isBusy = false);
+      if (mounted) setState(() => _busy = false);
     }
-  }
-
-  Future<void> _mergeFiles() async {
-    if (_isBusy) return;
-    if (_files.length < 2) {
-      _setStatus('Select at least two PDF files before merging.');
-      return;
-    }
-
-    setState(() {
-      _isBusy = true;
-      _mergedPdf = null;
-      _statusMessage = null;
-    });
-    final temporaryPath =
-        '${Directory.systemTemp.path}${Platform.pathSeparator}sickpdf_${DateTime.now().microsecondsSinceEpoch}.pdf';
-    try {
-      final bytes = await _mergeService.merge(
-        inputPaths: _files.map((file) => file.path!).toList(),
-        outputPath: temporaryPath,
-      );
-      if (!mounted) return;
-      setState(() => _mergedPdf = bytes);
-      developer.log(
-        'Merge completed: ${bytes.length} bytes.',
-        name: 'sickpdf.merge',
-      );
-      _setStatus(
-        'PDFs merged successfully',
-        secondary: 'Your merged PDF is ready to preview or save.',
-        isError: false,
-      );
-    } catch (error, stackTrace) {
-      developer.log(
-        'Merge failed.',
-        name: 'sickpdf.merge',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (mounted) {
-        _setStatus(
-          'Merge failed: ${error.toString().replaceFirst('Exception: ', '')}',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
-    }
-  }
-
-  Future<void> _savePdf() async {
-    if (_isBusy || _mergedPdf == null || _mergedPdf!.isEmpty) return;
-    setState(() => _isBusy = true);
-    try {
-      final outputPath = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save merged PDF',
-        fileName: 'merged_document.pdf',
-        type: FileType.custom,
-        allowedExtensions: ['pdf'],
-        bytes: _mergedPdf,
-      );
-      if (!mounted) return;
-      if (outputPath == null || outputPath.trim().isEmpty) {
-        _setStatus('Save cancelled. Your merged PDF is still ready to save.');
-        return;
-      }
-      _setStatus('PDF saved successfully', isError: false);
-    } catch (error, stackTrace) {
-      developer.log(
-        'Save failed.',
-        name: 'sickpdf.merge',
-        error: error,
-        stackTrace: stackTrace,
-      );
-      if (mounted) {
-        _setStatus(
-          'Save failed: ${error.toString().replaceFirst('Exception: ', '')}',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _isBusy = false);
-    }
-  }
-
-  void _setStatus(String message, {String? secondary, bool isError = true}) {
+    await _refresh();
     if (!mounted) return;
-    setState(() {
-      _statusMessage = secondary == null ? message : '$message\n$secondary';
-      _statusIsError = isError;
-    });
-  }
-
-  Future<void> _openPreview() async {
-    final bytes = _mergedPdf;
-    if (bytes == null || bytes.isEmpty) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (_) => PreviewPdfPage(bytes: bytes, onSave: _savePdf),
-      ),
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
     );
   }
 
+  String _formatSize(int bytes) {
+    if (bytes >= 1024 * 1024) {
+      return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+    }
+    if (bytes >= 1024) return '${(bytes / 1024).round()} KB';
+    return '$bytes B';
+  }
+
+  String _formatDate(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final docs = _docs;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Merge PDF'),
-        foregroundColor: _navy,
-        backgroundColor: _background,
+        title: const Text('Files'),
+        actions: [
+          IconButton(
+            tooltip: 'Import a PDF into the library',
+            onPressed: _busy ? null : _importFile,
+            icon: const Icon(Icons.add),
+          ),
+        ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Combine PDFs privately on your device.',
-              style: TextStyle(color: _navy, fontSize: 16),
-            ),
-            const SizedBox(height: 18),
-            OutlinedButton.icon(
-              onPressed: _isBusy ? null : _pickFiles,
-              icon: const Icon(Icons.add),
-              label: const Text('Select PDF files'),
-            ),
-            const SizedBox(height: 12),
-            if (_files.isNotEmpty) ...[
-              const Text(
-                'Reorder your PDFs before merging',
-                style: TextStyle(color: _navy, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Drag and drop files to change their order. The merged PDF will follow the order shown below.',
-                style: TextStyle(color: Colors.grey, fontSize: 13),
-              ),
-              const SizedBox(height: 10),
-            ],
-            Expanded(
-              child: _files.isEmpty
-                  ? const Center(
-                      child: Text(
-                        'No PDFs selected yet.\nChoose two or more files to begin.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    )
-                  : ReorderableListView.builder(
-                      itemCount: _files.length,
-                      onReorderItem: (oldIndex, newIndex) {
-                        if (_isBusy || oldIndex == newIndex) return;
-                        setState(() {
-                          _mergedPdf = null;
-                          _statusMessage = null;
-                          final file = _files.removeAt(oldIndex);
-                          _files.insert(newIndex, file);
-                        });
-                      },
-                      itemBuilder: (context, index) {
-                        final file = _files[index];
-                        return Card(
-                          key: ValueKey(file.path),
-                          child: ListTile(
-                            leading: const Icon(
-                              Icons.picture_as_pdf,
-                              color: _navy,
+      body: _busy && docs == null
+          ? const Center(child: CircularProgressIndicator())
+          : docs == null || docs.isEmpty
+              ? _FilesEmptyState(onImport: _importFile)
+              : RefreshIndicator(
+                  onRefresh: _refresh,
+                  child: ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.screen,
+                      AppSpacing.sm,
+                      AppSpacing.screen,
+                      AppSpacing.xxl,
+                    ),
+                    itemCount: docs.length,
+                    separatorBuilder: (_, _) => Divider(
+                      height: 1,
+                      color: theme.colorScheme.outlineVariant,
+                    ),
+                    itemBuilder: (context, index) {
+                      final doc = docs[index];
+                      return Semantics(
+                        button: true,
+                        label: 'Open ${doc.fileName}',
+                        child: InkWell(
+                          onTap: () => _open(doc),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.xxs,
+                              vertical: AppSpacing.sm,
                             ),
-                            title: Text(
-                              file.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            subtitle: Text('File ${index + 1}'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
+                            child: Row(
                               children: [
-                                const Icon(
-                                  Icons.drag_handle,
-                                  color: Colors.grey,
+                                Icon(
+                                  Icons.picture_as_pdf_outlined,
+                                  size: 22,
+                                  color: theme.colorScheme.onSurface,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        doc.fileName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.bodyLarge
+                                            ?.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 1),
+                                      Text(
+                                        '${_formatSize(doc.fileSize)} · '
+                                        '${_formatDate(doc.addedAt)}',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                          color: theme
+                                              .colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
                                 IconButton(
-                                  tooltip: 'Remove ${file.name}',
-                                  onPressed: _isBusy
-                                      ? null
-                                      : () => setState(() {
-                                          _mergedPdf = null;
-                                          _statusMessage = null;
-                                          _files.removeAt(index);
-                                        }),
-                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Remove ${doc.fileName}',
+                                  onPressed: _busy ? null : () => _delete(doc),
+                                  icon: const Icon(Icons.delete_outline),
                                 ),
                               ],
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+    );
+  }
+}
+
+class _FilesEmptyState extends StatelessWidget {
+  const _FilesEmptyState({required this.onImport});
+
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.folder_open_outlined,
+              size: 40,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-            if (_statusMessage != null) ...[
-              _InlineStatus(message: _statusMessage!, isError: _statusIsError),
-              const SizedBox(height: 10),
-            ],
-            if (_mergedPdf != null) ...[
-              OutlinedButton.icon(
-                onPressed: _isBusy ? null : _openPreview,
-                icon: const Icon(Icons.preview_outlined),
-                label: const Text('Preview PDF'),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'No documents yet',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(height: 10),
-            ],
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              'PDFs you create with sickPDF and save to the library appear '
+              'here. This list does not scan your device storage.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.lg),
             FilledButton.icon(
-              onPressed: _isBusy || _files.length < 2 ? null : _mergeFiles,
-              icon: _isBusy
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.merge_type),
-              label: Text(_isBusy ? 'Processing...' : 'Merge PDF'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _navy,
-                foregroundColor: Colors.white,
-              ),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: _isBusy || _mergedPdf == null ? null : _savePdf,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save PDF'),
+              onPressed: onImport,
+              icon: const Icon(Icons.add),
+              label: const Text('Import a PDF'),
             ),
           ],
         ),
@@ -764,112 +797,190 @@ class _MergePdfPageState extends State<MergePdfPage> {
   }
 }
 
-class _InlineStatus extends StatelessWidget {
-  const _InlineStatus({required this.message, required this.isError});
-
-  final String message;
-  final bool isError;
-
-  @override
-  Widget build(BuildContext context) {
-    final lines = message.split('\n');
-    final color = isError ? Colors.red.shade700 : Colors.green.shade800;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: (isError ? Colors.red : _green).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: (isError ? Colors.red : _green).withValues(alpha: 0.35),
-        ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            isError ? Icons.error_outline : Icons.check_circle_outline,
-            color: color,
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(
-                    text: lines.first,
-                    style: TextStyle(color: color, fontWeight: FontWeight.w700),
-                  ),
-                  if (lines.length > 1)
-                    TextSpan(
-                      text: '\n${lines.skip(1).join('\n')}',
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
-                        fontSize: 13,
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class PreviewPdfPage extends StatelessWidget {
-  const PreviewPdfPage({super.key, required this.bytes, required this.onSave});
-
-  final Uint8List bytes;
-  final Future<void> Function() onSave;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Preview PDF'),
-        foregroundColor: _navy,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: FilledButton.icon(
-              onPressed: onSave,
-              icon: const Icon(Icons.save_outlined, size: 18),
-              label: const Text('Save PDF'),
-              style: FilledButton.styleFrom(
-                backgroundColor: _navy,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ),
-        ],
-      ),
-      body: PdfViewer.data(
-        bytes,
-        sourceName: 'merged_document.pdf',
-        params: const PdfViewerParams(),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 12),
-          child: OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Back to Merge'),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
+/// Settings tab: appearance, privacy promise, app identity, and version.
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key});
-  @override
-  Widget build(BuildContext context) => const Center(
-    child: Text(
-      'Settings',
-      style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700, color: _navy),
+  const SettingsPage({super.key, this.onThemeModeChanged});
+
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
+
+  static const _points = <(IconData, String, String)>[
+    (
+      Icons.lock_outline,
+      'Private by design',
+      'No accounts, ads, or analytics. Nothing is uploaded.',
     ),
-  );
+    (
+      Icons.wifi_off_outlined,
+      'Works offline',
+      'All processing runs locally on your device.',
+    ),
+    (
+      Icons.file_copy_outlined,
+      'Your originals are safe',
+      'Tools read your files and save a new copy.',
+    ),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final border = theme.colorScheme.outlineVariant;
+    final docsDir = Platform.isAndroid || Platform.isIOS;
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.screen,
+        AppSpacing.lg,
+        AppSpacing.screen,
+        AppSpacing.xxl,
+      ),
+      children: [
+        Row(
+          children: [
+            const _Wordmark(),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Text(
+                'Offline PDF toolkit',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Semantics(
+          header: true,
+          child: Text(
+            'Appearance',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: border),
+          ),
+          child: ListTile(
+            leading: Icon(
+              MediaQuery.platformBrightnessOf(context) == Brightness.dark
+                  ? Icons.dark_mode_outlined
+                  : Icons.light_mode_outlined,
+              size: 20,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            title: const Text('Dark theme'),
+            subtitle: const Text('Light theme is used by default.'),
+            trailing: Switch(
+              value: Theme.of(context).brightness == Brightness.dark,
+              onChanged: (dark) =>
+                  onThemeModeChanged?.call(dark ? ThemeMode.dark : ThemeMode.light),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Semantics(
+          header: true,
+          child: Text(
+            'Privacy',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              for (var i = 0; i < _points.length; i++) ...[
+                if (i > 0) Divider(height: 1, color: border),
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        _points[i].$1,
+                        size: 20,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              _points[i].$2,
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              _points[i].$3,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Semantics(
+          header: true,
+          child: Text(
+            'About',
+            style: theme.textTheme.labelLarge?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Container(
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            borderRadius: BorderRadius.circular(AppRadius.md),
+            border: Border.all(color: border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            children: [
+              const ListTile(
+                leading: Icon(Icons.badge_outlined),
+                title: Text('Version'),
+                subtitle: Text('1.0.0'),
+              ),
+              Divider(height: 1, color: border),
+              ListTile(
+                leading: const Icon(Icons.folder_copy_outlined),
+                title: const Text('Library location'),
+                subtitle: Text(
+                  docsDir
+                      ? 'App documents folder ("library"), private to sickPDF.'
+                      : 'App documents folder, private to sickPDF.',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

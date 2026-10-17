@@ -4,6 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:pdfrx/pdfrx.dart';
 
 import '../services/pdf_add_text_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 class AddTextPdfPage extends StatefulWidget {
@@ -50,14 +52,18 @@ class _AddTextPdfPageState extends State<AddTextPdfPage> {
   void dispose() {
     _text.dispose();
     _filename.dispose();
+    _input = null;
+    _result = null;
     super.dispose();
   }
 
-  void _status(String value, {bool error = false}) =>
-      setState(() {
-        _message = value;
-        _error = error;
-      });
+  void _status(String value, {bool error = false}) {
+    if (!mounted) return;
+    setState(() {
+      _message = value;
+      _error = error;
+    });
+  }
 
   Future<int> _loadPageCount(Uint8List bytes) async {
     if (widget.pageCountLoader != null) return widget.pageCountLoader!(bytes);
@@ -137,12 +143,14 @@ class _AddTextPdfPageState extends State<AddTextPdfPage> {
       _status('Select one PDF first.', error: true);
       return false;
     }
+    if (_result != null) return true;
     final options = _options;
     final validation = validateAddTextOptions(options, _pageCount);
     if (validation != null) {
       _status(validation, error: true);
       return false;
     }
+    FocusScope.of(context).unfocus();
     setState(() {
       _busy = true;
       _message = null;
@@ -152,13 +160,14 @@ class _AddTextPdfPageState extends State<AddTextPdfPage> {
       if (!mounted) return false;
       setState(() => _result = output);
       return true;
-    } catch (error) {
-      if (mounted) {
-        _status(
-          error.toString().replaceFirst('PdfAddTextException: ', ''),
-          error: true,
-        );
-      }
+    } on PdfAddTextException catch (error) {
+      _status(error.message, error: true);
+      return false;
+    } catch (_) {
+      _status(
+        'Could not add text to this PDF. Try an unlocked, undamaged copy.',
+        error: true,
+      );
       return false;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -231,181 +240,213 @@ class _AddTextPdfPageState extends State<AddTextPdfPage> {
 
   @override
   Widget build(BuildContext context) {
+    final hasFile = _input != null;
     return Scaffold(
       appBar: AppBar(title: const Text('Add Text to PDF')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         children: [
-          const Text(
-            'Add custom text to a PDF locally. The original file stays unchanged.',
+          const ToolIntro(
+            text:
+                'Add a text label to a PDF. The original file stays unchanged.',
           ),
-          const SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: _busy ? null : _pick,
             icon: const Icon(Icons.upload_file),
             label: const Text('Select PDF'),
           ),
-          if (_sourceName != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                _pageCount > 0
-                    ? '$_sourceName • $_pageCount pages'
-                    : _sourceName!,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+          const SizedBox(height: AppSpacing.md),
+          if (!hasFile)
+            ToolEmptyState(
+              icon: Icons.text_fields,
+              title: 'Select a PDF to add text to',
+              message: 'Then type the text and choose where it goes.',
+              onSelect: _busy ? null : _pick,
+            )
+          else ...[
+            SelectedFileCard(
+              name: _sourceName!,
+              detail: _pageCount > 0 ? '$_pageCount pages' : null,
+              onReplace: _busy ? null : _pick,
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            ToolSection(
+              title: 'Text',
+              subtitle: 'Required.',
+              child: TextField(
+                controller: _text,
+                enabled: !_busy,
+                minLines: 1,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Text to add'),
+                onChanged: (_) => setState(() => _result = null),
               ),
             ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _text,
-            enabled: !_busy,
-            minLines: 1,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              labelText: 'Text to add',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (_) => setState(() => _result = null),
-          ),
-          const SizedBox(height: 8),
-          SwitchListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Apply to every page'),
-            value: _allPages,
-            onChanged: _busy
-                ? null
-                : (value) => setState(() {
-                    _allPages = value;
-                    _result = null;
-                  }),
-          ),
-          if (_pageCount > 0 && !_allPages)
-            DropdownButtonFormField<int>(
-              initialValue: _pageIndex,
-              decoration: const InputDecoration(
-                labelText: 'Target page',
-                border: OutlineInputBorder(),
-              ),
-              items: [
-                for (var i = 0; i < _pageCount; i++)
-                  DropdownMenuItem(value: i, child: Text('Page ${i + 1}')),
-              ],
-              onChanged: _busy
-                  ? null
-                  : (value) => setState(() {
-                      _pageIndex = value ?? 0;
-                      _result = null;
-                    }),
-            ),
-          const SizedBox(height: 8),
-          Text('Font size: ${_fontSize.round()} pt'),
-          Slider(
-            value: _fontSize,
-            min: 6,
-            max: 72,
-            divisions: 66,
-            onChanged: _busy
-                ? null
-                : (value) => setState(() {
-                    _fontSize = value;
-                    _result = null;
-                  }),
-          ),
-          DropdownButtonFormField<int>(
-            initialValue: _color,
-            decoration: const InputDecoration(labelText: 'Text color'),
-            items: [
-              for (final entry in _palette.entries)
-                DropdownMenuItem(value: entry.key, child: Text(entry.value)),
-            ],
-            onChanged: _busy
-                ? null
-                : (value) => setState(() {
-                    _color = value!;
-                    _result = null;
-                  }),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<AddTextAlignment>(
-            initialValue: _alignment,
-            decoration: const InputDecoration(
-              labelText: 'Horizontal alignment',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: AddTextAlignment.left,
-                child: Text('Left'),
-              ),
-              DropdownMenuItem(
-                value: AddTextAlignment.center,
-                child: Text('Center'),
-              ),
-              DropdownMenuItem(
-                value: AddTextAlignment.right,
-                child: Text('Right'),
-              ),
-            ],
-            onChanged: _busy
-                ? null
-                : (value) => setState(() {
-                    _alignment = value ?? AddTextAlignment.center;
-                    _result = null;
-                  }),
-          ),
-          const SizedBox(height: 8),
-          DropdownButtonFormField<AddTextVerticalPosition>(
-            initialValue: _vertical,
-            decoration: const InputDecoration(
-              labelText: 'Vertical position',
-              border: OutlineInputBorder(),
-            ),
-            items: const [
-              DropdownMenuItem(
-                value: AddTextVerticalPosition.top,
-                child: Text('Top'),
-              ),
-              DropdownMenuItem(
-                value: AddTextVerticalPosition.center,
-                child: Text('Center'),
-              ),
-              DropdownMenuItem(
-                value: AddTextVerticalPosition.bottom,
-                child: Text('Bottom'),
-              ),
-            ],
-            onChanged: _busy
-                ? null
-                : (value) => setState(() {
-                    _vertical = value ?? AddTextVerticalPosition.center;
-                    _result = null;
-                  }),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _filename,
-            enabled: !_busy,
-            decoration: const InputDecoration(labelText: 'Output filename'),
-          ),
-          const SizedBox(height: 12),
-          if (_busy) const LinearProgressIndicator(),
-          if (_message != null)
-            Text(
-              _message!,
-              style: TextStyle(
-                color: _error ? Colors.red.shade700 : Colors.green.shade800,
+            ToolSection(
+              title: 'Placement',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Apply to every page'),
+                    value: _allPages,
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() {
+                            _allPages = value;
+                            _result = null;
+                          }),
+                  ),
+                  if (_pageCount > 0 && !_allPages)
+                    DropdownButtonFormField<int>(
+                      initialValue: _pageIndex,
+                      decoration: const InputDecoration(labelText: 'Target page'),
+                      items: [
+                        for (var i = 0; i < _pageCount; i++)
+                          DropdownMenuItem(
+                            value: i,
+                            child: Text('Page ${i + 1}'),
+                          ),
+                      ],
+                      onChanged: _busy
+                          ? null
+                          : (value) => setState(() {
+                              _pageIndex = value ?? 0;
+                              _result = null;
+                            }),
+                    ),
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButtonFormField<AddTextVerticalPosition>(
+                    initialValue: _vertical,
+                    decoration: const InputDecoration(
+                      labelText: 'Vertical position',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AddTextVerticalPosition.top,
+                        child: Text('Top'),
+                      ),
+                      DropdownMenuItem(
+                        value: AddTextVerticalPosition.center,
+                        child: Text('Center'),
+                      ),
+                      DropdownMenuItem(
+                        value: AddTextVerticalPosition.bottom,
+                        child: Text('Bottom'),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() {
+                            _vertical = value ?? AddTextVerticalPosition.center;
+                            _result = null;
+                          }),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  DropdownButtonFormField<AddTextAlignment>(
+                    initialValue: _alignment,
+                    decoration: const InputDecoration(
+                      labelText: 'Horizontal alignment',
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: AddTextAlignment.left,
+                        child: Text('Left'),
+                      ),
+                      DropdownMenuItem(
+                        value: AddTextAlignment.center,
+                        child: Text('Center'),
+                      ),
+                      DropdownMenuItem(
+                        value: AddTextAlignment.right,
+                        child: Text('Right'),
+                      ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() {
+                            _alignment = value ?? AddTextAlignment.center;
+                            _result = null;
+                          }),
+                  ),
+                ],
               ),
             ),
-          const SizedBox(height: 8),
+            ToolSection(
+              title: 'Style',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'Font size: ${_fontSize.round()} pt',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      Expanded(
+                        child: Slider(
+                          value: _fontSize,
+                          min: 6,
+                          max: 72,
+                          divisions: 66,
+                          semanticFormatterCallback: (v) =>
+                              '${v.round()} points',
+                          onChanged: _busy
+                              ? null
+                              : (value) => setState(() {
+                                  _fontSize = value;
+                                  _result = null;
+                                }),
+                        ),
+                      ),
+                    ],
+                  ),
+                  DropdownButtonFormField<int>(
+                    initialValue: _color,
+                    decoration: const InputDecoration(labelText: 'Text color'),
+                    items: [
+                      for (final entry in _palette.entries)
+                        DropdownMenuItem(
+                          value: entry.key,
+                          child: Text(entry.value),
+                        ),
+                    ],
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() {
+                            _color = value!;
+                            _result = null;
+                          }),
+                  ),
+                ],
+              ),
+            ),
+            TextField(
+              controller: _filename,
+              enabled: !_busy,
+              decoration: const InputDecoration(labelText: 'Output filename'),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          if (_busy) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (_message != null) ...[
+            ToolStatus(message: _message!, isError: _error),
+            const SizedBox(height: AppSpacing.md),
+          ],
           FilledButton.icon(
-            onPressed: _busy || _input == null ? null : _preview,
+            onPressed: _busy || !hasFile ? null : _preview,
             icon: const Icon(Icons.preview_outlined),
-            label: const Text('Preview PDF with text'),
+            label: const Text('Preview & Save'),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: AppSpacing.sm),
           OutlinedButton.icon(
-            onPressed: _busy || _result == null ? null : _share,
+            onPressed: _busy || !hasFile ? null : _share,
             icon: const Icon(Icons.share_outlined),
             label: const Text('Share PDF with text'),
           ),

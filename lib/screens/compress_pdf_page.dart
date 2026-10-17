@@ -6,17 +6,22 @@ import 'package:flutter/material.dart';
 
 import '../services/pdf_compress_service.dart';
 import '../services/pdf_split_service.dart';
+import '../theme/app_theme.dart';
+import '../widgets/tool_scaffold.dart';
 import 'pdf_output_preview.dart';
 
 class CompressPdfPage extends StatefulWidget {
-  const CompressPdfPage({super.key});
+  const CompressPdfPage({super.key, this.service});
+
+  /// Injectable service so widget tests can bypass the platform channel.
+  final PdfCompressService? service;
 
   @override
   State<CompressPdfPage> createState() => _CompressPdfPageState();
 }
 
 class _CompressPdfPageState extends State<CompressPdfPage> {
-  final _service = PdfCompressService();
+  late final _service = widget.service ?? PdfCompressService();
   PdfCompressionMode _mode = PdfCompressionMode.medium;
   final _filename = TextEditingController(text: 'document_compressed.pdf');
   String? _path;
@@ -31,6 +36,7 @@ class _CompressPdfPageState extends State<CompressPdfPage> {
   @override
   void dispose() {
     _filename.dispose();
+    _result = null;
     super.dispose();
   }
 
@@ -48,6 +54,7 @@ class _CompressPdfPageState extends State<CompressPdfPage> {
   );
 
   Future<void> _pick() async {
+    if (_busy) return;
     setState(() => _busy = true);
     try {
       final selection = await FilePicker.platform.pickFiles(
@@ -104,7 +111,7 @@ class _CompressPdfPageState extends State<CompressPdfPage> {
       _status(
         result.reduced
             ? 'Compression produced a smaller PDF. Preview before saving.'
-            : 'This PDF is already optimized, or no smaller output could be produced with the selected settings. Preview and Save now use the unchanged original.',
+            : 'This PDF is already optimized, so no smaller output was produced. Preview and Save use the unchanged original.',
       );
     } catch (error) {
       _log('Compression', error);
@@ -151,7 +158,8 @@ class _CompressPdfPageState extends State<CompressPdfPage> {
       }
     } catch (error) {
       _log('Save', error);
-      message = 'Save failed. Choose a different destination and check available space.';
+      message =
+          'Save failed. Choose a different destination and check available space.';
       failed = true;
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -185,107 +193,191 @@ class _CompressPdfPageState extends State<CompressPdfPage> {
   @override
   Widget build(BuildContext context) {
     final result = _result;
+    final hasFile = _path != null;
     return Scaffold(
       appBar: AppBar(title: const Text('Compress PDF')),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(AppSpacing.screen),
         children: [
-          const Text(
-            'Optimize a PDF privately on your device. The original stays unchanged.',
+          const ToolIntro(
+            text:
+                'Reduce file size while keeping the original PDF. Text and vector content are never rasterized.',
           ),
           OutlinedButton.icon(
             onPressed: _busy ? null : _pick,
             icon: const Icon(Icons.upload_file),
             label: const Text('Select PDF'),
           ),
-          if (_name != null)
-            Text(
-              '$_name\nOriginal: ${formatPdfSize(_size!)} ($_size bytes) • $_pages pages',
+          const SizedBox(height: AppSpacing.md),
+          if (hasFile)
+            SelectedFileCard(
+              name: _name!,
+              detail: '${formatPdfSize(_size!)} • $_pages pages',
+              onReplace: _busy ? null : _pick,
+            )
+          else
+            ToolEmptyState(
+              icon: Icons.compress,
+              title: 'Select one PDF to begin',
+              message: 'Already optimized PDFs may not shrink further.',
+              onSelect: _busy ? null : _pick,
             ),
-          const SizedBox(height: 16),
-          const Text(
-            'Compression preset',
-            style: TextStyle(fontWeight: FontWeight.bold),
+          const SizedBox(height: AppSpacing.lg),
+          ToolSection(
+            title: 'Compression level',
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final mode in PdfCompressionMode.values)
+                  RadioListTile<PdfCompressionMode>(
+                    value: mode,
+                    // ignore: deprecated_member_use
+                    groupValue: _mode,
+                    // ignore: deprecated_member_use
+                    onChanged: _busy
+                        ? null
+                        : (value) => setState(() {
+                            _mode = value!;
+                            _result = null;
+                            _message = null;
+                          }),
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(_modeTitle(mode)),
+                    subtitle: Text(_modeSubtitle(mode)),
+                  ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Medium and High recompress eligible images and may soften them. Preview before saving.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
           ),
-          const Text(
-            'Text and vector objects are not rasterized. Medium and High recompress eligible opaque RGB/grayscale images; transparency, images inside forms, tagged images and unusual color spaces are skipped. Already optimized PDFs may not shrink.',
-          ),
-          const Text(
-            'Up to 64 MiB input. Digitally signed PDFs should not be optimized: rewriting invalidates signatures.',
-          ),
-          DropdownButton<PdfCompressionMode>(
-            value: _mode,
-            isExpanded: true,
-            items: const [
-              DropdownMenuItem(
-                value: PdfCompressionMode.lossless,
-                child: Text('Low — lossless, images unchanged'),
-              ),
-              DropdownMenuItem(
-                value: PdfCompressionMode.medium,
-                child: Text('Medium — 150 dpi, JPEG quality 80'),
-              ),
-              DropdownMenuItem(
-                value: PdfCompressionMode.high,
-                child: Text('High — 100 dpi, JPEG quality 55'),
-              ),
-            ],
-            onChanged: _busy
-                ? null
-                : (mode) => setState(() {
-                    _mode = mode!;
-                    _result = null;
-                    _message = null;
-                  }),
-          ),
-          const Text(
-            'Medium/High may soften images and introduce JPEG artifacts. Preview before saving. Resolution targets apply where images are oversized.',
-          ),
-          const SizedBox(height: 12),
+          if (_busy) ...[
+            const LinearProgressIndicator(),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (_message != null) ...[
+            ToolStatus(message: _message!, isError: _error),
+            const SizedBox(height: AppSpacing.md),
+          ],
           FilledButton.icon(
-            onPressed: _busy || _path == null ? null : _compress,
+            onPressed: _busy || !hasFile ? null : _compress,
             icon: const Icon(Icons.compress),
-            label: const Text('Compress PDF'),
+            label: Text(_busy ? 'Optimizing…' : 'Compress PDF'),
           ),
-          if (_busy) const LinearProgressIndicator(),
-          if (_message != null)
-            Semantics(
-              liveRegion: true,
-              child: Text(
-                _message!,
-                style: TextStyle(
-                  color: _error ? Colors.red.shade700 : Colors.green.shade800,
+          if (result != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            ToolSection(
+              title: 'Result',
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _ResultRow(
+                        label: 'Original',
+                        value: formatPdfSize(result.originalSize),
+                      ),
+                      _ResultRow(
+                        label: 'Output',
+                        value: formatPdfSize(result.outputSize),
+                      ),
+                      _ResultRow(
+                        label: 'Saved',
+                        value:
+                            '${formatPdfSize(result.bytesSaved)} '
+                            '(${result.reductionPercent.clamp(0, 100).toStringAsFixed(1)}%)',
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          if (result != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              'Original: ${formatPdfSize(result.originalSize)} (${result.originalSize} bytes)\nOutput: ${formatPdfSize(result.outputSize)} (${result.outputSize} bytes)\nBytes saved: ${result.bytesSaved}\nReduction: ${result.reductionPercent.toStringAsFixed(2)}%',
-            ),
-            Text('Images recompressed in candidate: ${result.imagesChanged}'),
-            Text(
-              'Validated candidate: ${result.candidateSize} bytes; retained ${result.retainedOriginal ? "original" : "candidate"}.',
-            ),
-            Text(
-              'Processing: ${result.diagnostics.entries.map((e) => "${e.key}: ${e.value}").join(", ")}',
             ),
             TextField(
               controller: _filename,
               enabled: !_busy,
               decoration: const InputDecoration(labelText: 'Output filename'),
+              onChanged: (_) => setState(() {}),
             ),
-            OutlinedButton.icon(
-              onPressed: _busy ? null : _preview,
-              icon: const Icon(Icons.preview_outlined),
-              label: const Text('Preview PDF'),
-            ),
-            FilledButton.icon(
-              onPressed: _busy ? null : _save,
-              icon: const Icon(Icons.save_outlined),
-              label: const Text('Save PDF'),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : _preview,
+                    icon: const Icon(Icons.preview_outlined),
+                    label: const Text('Preview'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: _busy ? null : _save,
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save PDF'),
+                  ),
+                ),
+              ],
             ),
           ],
+        ],
+      ),
+    );
+  }
+
+  String _modeTitle(PdfCompressionMode mode) {
+    switch (mode) {
+      case PdfCompressionMode.lossless:
+        return 'Low — lossless';
+      case PdfCompressionMode.medium:
+        return 'Medium — recommended';
+      case PdfCompressionMode.high:
+        return 'High — smallest file';
+    }
+  }
+
+  String _modeSubtitle(PdfCompressionMode mode) {
+    switch (mode) {
+      case PdfCompressionMode.lossless:
+        return 'Images stay unchanged. Safest option.';
+      case PdfCompressionMode.medium:
+        return '150 dpi, JPEG quality 80.';
+      case PdfCompressionMode.high:
+        return '100 dpi, JPEG quality 55. Most aggressive.';
+    }
+  }
+}
+
+class _ResultRow extends StatelessWidget {
+  const _ResultRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            label,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          Text(
+            value,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
         ],
       ),
     );
