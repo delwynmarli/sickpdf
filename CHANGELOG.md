@@ -7,10 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Stabilization and product-quality pass. No new PDF tools; all twelve existing
-tools were audited, standardized, and made more accessible and reliable.
-
 ### Added
+- GitHub Actions workflow (`.github/workflows/release-validation.yml`) that
+  runs `flutter pub get`, `flutter analyze`, `flutter test`, and the arm64
+  release APK build on every push and pull request. It reports pass/fail only:
+  no releases, tags, commits, or uploaded artifacts. The release build is
+  included because R8 only runs there, and the OCR dependency needs the
+  `-dontwarn` rules in `android/app/proguard-rules.pro`.
+- **OCR PDF** tool: reads a scanned PDF on the device and exports the
+  recognized text as a UTF-8 `.txt` file. Pages are rendered one at a time
+  with the existing PDFium renderer, recognized with the on-device ML Kit
+  Latin model, and marked with `--- Page N ---` separators. Pages that
+  already carry a text layer are extracted directly instead of being
+  recognized again. Progress, cancellation, and per-page failure reporting
+  are included; the original PDF is never modified and an existing output
+  file is never overwritten. See [docs/ocr_pdf.md](docs/ocr_pdf.md).
+- `google_mlkit_text_recognition` 0.17.1 as a pinned dependency. The Latin
+  model ships inside the APK, so OCR works offline on first use with no
+  model download. The umbrella `google_ml_kit` package was not used.
+- `android/app/proguard-rules.pro` with the `-dontwarn` rules the OCR
+  dependency needs. Without them the **release** build fails R8 with
+  "Missing class com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions";
+  the debug build was unaffected because R8 does not run there.
 - Shared Material 3 design system (`lib/theme/app_theme.dart`, light + dark) and reusable tool widgets (`lib/widgets/tool_scaffold.dart`).
 - Redesigned Home screen with grouped tool cards, icons, and descriptions.
 - Accessibility: labelled tool cards, live-region status messages, semantic slider/checkbox labels, 48dp touch targets, and `test/accessibility_test.dart`.
@@ -21,11 +39,27 @@ tools were audited, standardized, and made more accessible and reliable.
 
 ### Changed
 - All tool screens standardized: consistent titles, back navigation, typography, form controls, disabled-until-valid primary actions, and plain-English status feedback with recovery hints.
+- The Android share channel now handles plain text files as well as PDFs, so the OCR output can be shared.
 - About tab replaces the previous empty Settings placeholder.
 - Watermark tool extended (style, page selection).
 - Document library handling centralized in `lib/services/document_library.dart`; theme persistence in `lib/services/theme_preferences.dart`.
 
 ### Fixed
+- **Privacy:** the on-device OCR dependency pulled in Google's telemetry
+  uploader and the `INTERNET` / `ACCESS_NETWORK_STATE` permissions with it.
+  Both Android manifests now remove the uploader and those permissions, so
+  the installed app holds no network permission at all and records no
+  telemetry. Verified on a device: the merged manifest has no CCT backend,
+  `dumpsys package` reports no network permission, and no telemetry event
+  is queued during an OCR run.
+- OCR: cancelling while the last page is being processed no longer publishes
+  a result the user asked to stop; the cancellation flag is now checked after
+  every page and again before the output file is written.
+- OCR: a page that yields no readable text is now marked in the output
+  instead of leaving a silently blank section.
+- OCR: the result panel shows and offers the name of the file that was
+  actually written, so a collision suffix such as `report_ocr (2).txt` is
+  what gets saved and shared.
 - Removed non-existent `fontFamily: 'sans'` reference so system font and text scaling apply.
 
 ## [1.0.0] - 2025

@@ -30,9 +30,29 @@ Before submitting changes, run:
 ```sh
 flutter analyze
 flutter test
+flutter build apk --release --target-platform android-arm64
 ```
 
-Both must pass. New features should come with tests covering the service logic and the widget behavior.
+All three must pass. New features should come with tests covering the service
+logic and the widget behavior.
+
+The release build is part of the list because R8 only runs in release mode.
+A green debug build does **not** prove the release build works: the on-device
+OCR dependency needs the `-dontwarn` rules in
+`android/app/proguard-rules.pro`, and only the release build exercises them.
+See [docs/ocr_pdf.md](docs/ocr_pdf.md) for why those rules exist and when they
+should be revisited.
+
+### Continuous integration
+
+`.github/workflows/release-validation.yml` runs the three commands above on
+every push to `main`, on every pull request, and on demand. It reports
+pass/fail only: it does not publish releases, create tags, commit changes, or
+upload any artifact.
+
+If CI fails on the release build step, the usual cause is a missing class
+after a dependency change. Read the R8 error before adding a rule, and keep
+any new rule as narrow as possible.
 
 ## Submitting a bug report
 
@@ -49,7 +69,7 @@ Do not attach confidential documents.
 
 1. Fork and create a branch from `main`.
 2. Keep changes incremental and scoped to one tool or concern.
-3. Run `flutter analyze` and `flutter test`; both must pass.
+3. Run `flutter analyze`, `flutter test`, and the release APK build; all must pass.
 4. Describe what changed and why in the PR description.
 
 ## Expectations

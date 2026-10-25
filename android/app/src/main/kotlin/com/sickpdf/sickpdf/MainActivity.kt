@@ -189,10 +189,21 @@ class MainActivity : FlutterActivity() {
                     result.error("invalid_input", "Nothing to share.", null); return@setMethodCallHandler
                 }
                 try {
+                    // Only PDF and plain text outputs exist today, so the
+                    // extension and the shared mime type follow the name.
                     val safeName = File(fileName).name.let {
-                        if (it.lowercase().endsWith(".pdf")) it else "$it.pdf"
+                        when {
+                            it.lowercase().endsWith(".pdf") -> it
+                            it.lowercase().endsWith(".txt") -> it
+                            else -> "$it.pdf"
+                        }
                     }
-                    val directory = File(cacheDir, "signed").apply { mkdirs() }
+                    val mimeType = if (safeName.lowercase().endsWith(".txt")) {
+                        "text/plain"
+                    } else {
+                        "application/pdf"
+                    }
+                    val directory = File(cacheDir, "shared").apply { mkdirs() }
                     val target = File(directory, safeName)
                     FileOutputStream(target).use { it.write(bytes) }
                     val uri = FileProvider.getUriForFile(
@@ -201,16 +212,16 @@ class MainActivity : FlutterActivity() {
                         target,
                     )
                     val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/pdf"
+                        type = mimeType
                         putExtra(Intent.EXTRA_STREAM, uri)
                         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                     }
                     runOnUiThread {
-                        startActivity(Intent.createChooser(intent, "Share signed PDF"))
+                        startActivity(Intent.createChooser(intent, "Share file"))
                         result.success(null)
                     }
                 } catch (_: Exception) {
-                    runOnUiThread { result.error("share_failed", "Could not share this PDF.", null) }
+                    runOnUiThread { result.error("share_failed", "Could not share this file.", null) }
                 }
             }
     }

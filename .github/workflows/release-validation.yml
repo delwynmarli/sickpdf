@@ -1,0 +1,119 @@
+name: Release validation
+
+# Validates that the app still analyzes, tests, and builds a release APK.
+#
+# The release build is included on purpose: R8 only runs in release mode, so a
+# green debug build does NOT prove the release build works. The OCR dependency
+# needs the -dontwarn rules in android/app/proguard-rules.pro for exactly this
+# reason.
+#
+# This workflow only reports pass/fail. It never publishes a release, creates a
+# tag, commits, or uploads a signed artifact.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+# Cancel superseded runs on the same ref.
+concurrency:
+  group: release-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  release-validation:
+    name: Analyze, test, and build release APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          # The project requires Flutter >= 3.47 with Dart >= 3.13
+          # (see pubspec.yaml and CONTRIBUTING.md). Pin the channel so the
+          # build does not silently change when a new stable release lands.
+          channel: stable
+          flutter-version: '3.47.7'
+          cache: true
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          # AGP 9.1.0 and Kotlin 2.4.0 require JDK 17 or newer.
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up the Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: 'platforms;android-36 build-tools;36.0.0'
+
+      - name: Accept Android SDK licenses
+        run: |
+          yes | flutter doctor --android-licenses > /dev/null 2>&1 || true
+          flutter doctor -v
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Test
+        run: flutter test
+
+      # Runs R8, so it catches the missing-class failures that only appear in
+      # release builds. No signing key is configured: the project's release
+      # build type currently uses the debug signing config, so this produces an
+      # unsigned-in-production artifact that is never uploaded anywhere.
+      - name: Build release APK (arm64)
+        run: flutter build apk --release --target-platform android-arm64
+
+      # A plain size report. The artifact itself is deliberately not uploaded.
+      - name: Report the APK size
+        run: |
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          if [ ! -f "$apk" ]; then
+            echo "::error::release APK was not produced at $apk"
+            exit 1
+          fi
+          bytes=$(stat -c %s "$apk")
+          echo "Release APK: $apk"
+          echo "Release APK size: $((bytes / 1024 / 1024)) MiB ($bytes bytes)"
+
+      # The installed app must not be able to reach the network. The OCR
+      # dependency ships a telemetry uploader and asks for INTERNET, so this
+      # check guards the manifest rules that remove both. The APK is inspected
+      # directly, so the check does not depend on Gradle internals.
+      - name: Verify the release APK has no network permissions
+        run: |
+          apk="build/app/outputs/flutter-apk/app-release.apk"
+          aapt2="$(command -v aapt2 || true)"
+          if [ -z "$aapt2" ]; then
+            aapt2="$(ls "${ANDROID_SDK_ROOT:-$ANDROID_HOME}/build-tools/"*/aapt2 2>/dev/null | sort -V | tail -1)"
+          fi
+          if [ -z "$aapt2" ] || [ ! -x "$aapt2" ]; then
+            echo "::error::aapt2 was not found; cannot verify the APK permissions"
+            exit 1
+          fi
+          permissions="$("$aapt2" dump permissions "$apk")"
+          echo "$permissions"
+          if echo "$permissions" | grep -qE 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE)'; then
+            echo "::error::the release APK still requests a network permission"
+            exit 1
+          fi
+          echo "No INTERNET or ACCESS_NETWORK_STATE permission in the release APK."
+
+      - name: Summarize
+        if: always()
+        run: |
+          echo "Release validation finished. No artifact was published and no release, tag, or commit was created."

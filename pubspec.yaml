@@ -41,6 +41,9 @@ dependencies:
   image: 4.12.0
   ffi: 2.2.0
   pdfium_dart: 0.3.1
+  # On-device OCR for scanned PDFs. The bundled Latin model ships inside the
+  # APK, so recognition works offline on first use with no model download.
+  google_mlkit_text_recognition: 0.17.1
 
 dev_dependencies:
   flutter_test:

@@ -4,6 +4,7 @@ import '../screens/add_text_pdf_page.dart';
 import '../theme/app_theme.dart';
 import '../screens/compress_pdf_page.dart';
 import '../screens/images_to_pdf_page.dart';
+import '../screens/ocr_pdf_page.dart';
 import '../screens/organize_pdf_page.dart';
 import '../screens/page_numbers_pdf_page.dart';
 import '../screens/protect_pdf_page.dart';
@@ -101,6 +102,13 @@ const List<ToolDefinition> kTools = <ToolDefinition>[
     builder: _imagesBuilder,
   ),
   ToolDefinition(
+    name: 'OCR PDF',
+    description: 'Read a scanned PDF and export the text.',
+    icon: Icons.document_scanner_outlined,
+    group: ToolGroup.convert,
+    builder: _ocrBuilder,
+  ),
+  ToolDefinition(
     name: 'Rotate PDF',
     description: 'Rotate selected pages by 90°.',
     icon: Icons.rotate_right,
@@ -156,6 +164,7 @@ Widget _splitBuilder(BuildContext context) => const SplitPdfPage();
 Widget _organizeBuilder(BuildContext context) => const OrganizePdfPage();
 Widget _compressBuilder(BuildContext context) => const CompressPdfPage();
 Widget _imagesBuilder(BuildContext context) => const ImagesToPdfPage();
+Widget _ocrBuilder(BuildContext context) => const OcrPdfPage();
 Widget _rotateBuilder(BuildContext context) => const RotatePdfPage();
 Widget _addTextBuilder(BuildContext context) => const AddTextPdfPage();
 Widget _watermarkBuilder(BuildContext context) => const WatermarkPdfPage();
