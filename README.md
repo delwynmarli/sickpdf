@@ -1,11 +1,11 @@
 # sickPDF
 
-sickPDF is an offline-first PDF toolkit for Android, built with Flutter. It lets you merge, split, organize, compress, rotate, protect, unlock, watermark, number, sign, annotate, OCR scans, and create PDF documents — entirely on your device. No accounts, no cloud services, no telemetry.
+sickPDF is an offline-first PDF toolkit for Android, built with Flutter. It lets you merge, split, organize, compress, rotate, protect, unlock, watermark, number, sign, annotate, scan documents, OCR scans, and create PDF documents — entirely on your device. No accounts, no cloud services, no telemetry.
 
 ## Status
 
 - **Platform:** Android. The repository contains Flutter scaffolding for iOS, web, and desktop, but only Android has been set up and tested.
-- **Stability:** All thirteen tools are implemented and covered by unit/widget tests. Physical-device UI and accessibility testing is partially complete (see [Limitations](#limitations)).
+- **Stability:** All fourteen tools are implemented and covered by unit/widget tests. Physical-device UI and accessibility testing is partially complete (see [Limitations](#limitations)).
 - Current version: 1.1.0 (see [CHANGELOG.md](CHANGELOG.md)).
 
 ## Features
@@ -27,6 +27,7 @@ All of the following are implemented with their own service, screen, and tests:
 | Add Text | Insert styled text at a chosen placement |
 | Image to PDF | Convert multiple images to a PDF with page size, margin, and fit options |
 | OCR PDF | Read a scanned PDF on-device and export the recognized text as TXT |
+| Scan Document | Capture pages with the camera, crop them, and save them as a PDF |
 
 Common workflow across tools: select input → configure → process → in-app preview (via `pdfrx`/PDFium) → save through the Android system document picker (or share, where supported).
 
@@ -35,10 +36,11 @@ Common workflow across tools: select input → configure → process → in-app 
 - No account system, backend, analytics, advertising, or document-upload workflow.
 - PDF processing uses local file paths and in-memory bytes. No network calls are made during document operations.
 - **The installed app holds no `INTERNET` permission at all.** The on-device OCR dependency pulls in Google's telemetry uploader and network permissions by default; both Android manifests strip them again, so the app is structurally unable to make a network request. See [docs/ocr_pdf.md](docs/ocr_pdf.md).
+- **Scan Document is the only tool that needs a permission: `CAMERA`.** It is requested only when the user opens the camera, and the scan is processed entirely on the device. The camera plugin's `RECORD_AUDIO`, `WRITE_EXTERNAL_STORAGE`, and implied `READ_EXTERNAL_STORAGE` permissions are removed again, because sickPDF records no audio and writes scans only to its own app-private cache. See [docs/scan_document.md](docs/scan_document.md).
 - The system document picker may expose third-party cloud providers (e.g. Drive); choose files stored on the device for offline use.
 - Picker copies and temporary output can persist in app/OS cache after interrupted operations.
 
-A complete network audit has not been performed, but the dependency set (`file_picker`, `path_provider`, `pdf_combiner`, `pdfrx`, `image`, `pdfium_dart`, `ffi`, `google_mlkit_text_recognition`) contains no analytics or networking packages.
+A complete network audit has not been performed, but the dependency set (`file_picker`, `path_provider`, `pdf_combiner`, `pdfrx`, `image`, `pdfium_dart`, `ffi`, `google_mlkit_text_recognition`, `camera`, `image_cropper`) contains no analytics or networking packages.
 
 OCR uses the ML Kit text recognition model that ships inside the APK, so a scan can be read with no network access at all. See [docs/ocr_pdf.md](docs/ocr_pdf.md).
 
@@ -134,8 +136,10 @@ docs/                  Per-tool design notes
 - [`file_picker`](https://pub.dev/packages/file_picker) — document selection and save
 - [`pdf_combiner`](https://pub.dev/packages/pdf_combiner) — local PDF merging
 - [`pdfrx`](https://pub.dev/packages/pdfrx) (+ `pdfium_dart`) — local rendering, page extraction
-- [`image`](https://pub.dev/packages/image) — image optimization for Image to PDF
+- [`image`](https://pub.dev/packages/image) — image optimization for Image to PDF, and page decoding/edge detection for Scan Document
 - [`google_mlkit_text_recognition`](https://pub.dev/packages/google_mlkit_text_recognition) — on-device OCR (Latin script, bundled model, Apache-2.0)
+- [`camera`](https://pub.dev/packages/camera) — live camera capture for Scan Document
+- [`image_cropper`](https://pub.dev/packages/image_cropper) — the manual crop editor for Scan Document
 - [`path_provider`](https://pub.dev/packages/path_provider), `ffi`, `cupertino_icons`
 
 Native Android PDF operations (signing, text insertion, image conversion, protection, unlocking) use bundled libraries declared in `android/app/build.gradle.kts`. Retain all third-party license notices when redistributing.
@@ -148,6 +152,8 @@ Native Android PDF operations (signing, text insertion, image conversion, protec
 - Recent-file history is not persisted.
 - OCR PDF recognizes **Latin script only** (including Indonesian) and exports plain text. It does not create a searchable PDF. Accuracy depends on scan quality, rotation, contrast, and layout.
 - The OCR model is bundled in the APK. A release arm64 APK is 61.4 MB with OCR and 31.3 MB without, so the feature costs about 30 MB.
+- Scan Document's automatic edge detection is a best-effort Sobel pass, not a full document scanner. It finds a page on a plain background; on a cluttered desk it reports no document and the manual crop editor is used instead. Perspective is corrected only by the crop editor's own transform, not by a dedicated dewarp step.
+- Scan Document is implemented and covered by automated tests, but the camera preview, the permission prompt, and the crop editor have **not** been verified on a physical device.
 - iOS, web, and desktop are untested and unsupported.
 - Accessibility (text scaling, TalkBack), lifecycle interruption, and all supported file variants need further physical-device testing.
 

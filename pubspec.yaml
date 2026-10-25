@@ -44,6 +44,12 @@ dependencies:
   # On-device OCR for scanned PDFs. The bundled Latin model ships inside the
   # APK, so recognition works offline on first use with no model download.
   google_mlkit_text_recognition: 0.17.1
+  # Scan Document: live camera capture. The plugin requests the camera
+  # permission itself, so no extra permission plugin is needed.
+  camera: ^0.12.1
+  # Scan Document: the crop editor used to trim each captured page before it
+  # is turned into a PDF. It draws its own UI, so it needs no permissions.
+  image_cropper: ^13.0.0
 
 dev_dependencies:
   flutter_test:

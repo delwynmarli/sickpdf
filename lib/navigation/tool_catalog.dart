@@ -9,6 +9,7 @@ import '../screens/organize_pdf_page.dart';
 import '../screens/page_numbers_pdf_page.dart';
 import '../screens/protect_pdf_page.dart';
 import '../screens/rotate_pdf_page.dart';
+import '../screens/scan_document_page.dart';
 import '../screens/sign_pdf_page.dart';
 import '../screens/split_pdf_page.dart';
 import '../screens/unlock_pdf_page.dart';
@@ -109,6 +110,13 @@ const List<ToolDefinition> kTools = <ToolDefinition>[
     builder: _ocrBuilder,
   ),
   ToolDefinition(
+    name: 'Scan Document',
+    description: 'Capture pages with the camera and save them as a PDF.',
+    icon: Icons.photo_camera_outlined,
+    group: ToolGroup.convert,
+    builder: _scanBuilder,
+  ),
+  ToolDefinition(
     name: 'Rotate PDF',
     description: 'Rotate selected pages by 90°.',
     icon: Icons.rotate_right,
@@ -165,6 +173,7 @@ Widget _organizeBuilder(BuildContext context) => const OrganizePdfPage();
 Widget _compressBuilder(BuildContext context) => const CompressPdfPage();
 Widget _imagesBuilder(BuildContext context) => const ImagesToPdfPage();
 Widget _ocrBuilder(BuildContext context) => const OcrPdfPage();
+Widget _scanBuilder(BuildContext context) => const ScanDocumentPage();
 Widget _rotateBuilder(BuildContext context) => const RotatePdfPage();
 Widget _addTextBuilder(BuildContext context) => const AddTextPdfPage();
 Widget _watermarkBuilder(BuildContext context) => const WatermarkPdfPage();
