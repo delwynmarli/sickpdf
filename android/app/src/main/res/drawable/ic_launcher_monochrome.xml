@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Single-tone S used by Android themed (monochrome) launcher icons.
+
+  Same continuous stroke geometry and same 44.5 x 51 dp size as the colour
+  foreground, so the themed icon keeps the complete silhouette and the same
+  2.02dp clearance inside the guaranteed-safe circle. The folded-paper cue is
+  intentionally omitted: themed icons are single-tone and the cut-out would
+  read as a hole.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <path
+        android:pathData="M69.25,40 C69.25,35.5 65.25,35.5 59.25,35.5 C51.25,35.5 44.25,38 41.25,44 C38.75,49 41.25,54 47.25,57 C55.25,60 63.25,62 66.25,67 C69.25,71 66.25,72.5 60.25,72.5 C52.25,72.5 44.25,70 40.25,65"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="14"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

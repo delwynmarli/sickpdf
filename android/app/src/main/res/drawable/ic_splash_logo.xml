@@ -1,9 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Brand mark shown on the Android 12+ splash screen. Sized to the platform's
-  recommended 108dp splashboard icon canvas so the system can mask it.
-  The sheet is drawn white-on-teal so it stays visible against the
-  splash background color (the launcher icon inverts this contrast).
+  sickPDF native splash mark.
+
+  Same continuous folded-ribbon S as the launcher, scaled separately for the
+  splash layout rather than reusing the icon scale: Android 12 masks this
+  drawable into a 72dp circle, so the mark is drawn at 0.87 scale to leave
+  ~9dp of breathing room on every side. Max radius 26.95dp inside the 36dp
+  splash mask. No wordmark, no animation, no artificial delay.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
@@ -11,22 +14,15 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
+    <!-- Stroke width and geometry scaled by 0.87 about the canvas centre. -->
+    <path
+        android:pathData="M67.27,41.82 C67.27,37.91 63.79,37.91 58.57,37.91 C51.61,37.91 45.52,40.08 42.91,45.3 C40.73,49.65 42.91,54 48.13,56.61 C55.09,59.22 62.05,60.96 64.66,65.31 C67.27,68.79 64.66,70.09 59.44,70.09 C52.48,70.09 45.52,67.92 42.04,63.57"
+        android:strokeColor="#147D73"
+        android:strokeWidth="12.18"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M40,30 L60,30 L72,42 L72,78 A4,4 0 0 1 68,82 L40,82 A4,4 0 0 1 36,78 L36,34 A4,4 0 0 1 40,30 Z" />
-
-    <path
-        android:fillColor="#147D73"
-        android:fillAlpha="0.25"
-        android:pathData="M60,30 L72,42 L60,42 Z" />
-
-    <path
-        android:fillColor="#147D73"
-        android:pathData="M43,48 L65,48 L65,51.5 L43,51.5 Z" />
-    <path
-        android:fillColor="#147D73"
-        android:pathData="M43,57 L65,57 L65,60.5 L43,60.5 Z" />
-    <path
-        android:fillColor="#147D73"
-        android:pathData="M43,66 L58,66 L58,69.5 L43,69.5 Z" />
+        android:pathData="M58.35,34.42 L64.88,34.42 L62.27,40.52 L55.74,40.52 Z" />
 </vector>
