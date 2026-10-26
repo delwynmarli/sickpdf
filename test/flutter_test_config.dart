@@ -55,7 +55,7 @@ File? _findNativeAssetsFile() {
   final separator = Platform.pathSeparator;
   final os = Platform.operatingSystem;
   final relative =
-      'build${separator}native_assets${separator}$os'
+      'build${separator}native_assets$separator$os'
       '${separator}native_assets.json';
   var directory = Directory.current;
   while (true) {
