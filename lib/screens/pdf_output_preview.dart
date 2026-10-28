@@ -60,15 +60,26 @@ class PdfOutputPreviewState extends State<PdfOutputPreview> {
       final add = widget.addToLibrary;
       if (add != null) {
         await add(widget.bytes, widget.name);
+        if (!mounted) return;
+        setState(
+          () => _message = 'Added to Files. Find it under the Files tab.',
+        );
       } else {
-        // Production path: store into the app-managed library directly.
-        await DocumentLibrary().addFromBytes(
+        // Production path: store into the app-managed library directly and
+        // report the name it actually got, which may carry a collision suffix.
+        final doc = await DocumentLibrary().addFromBytes(
           widget.bytes,
           displayName: widget.name,
         );
+        if (!mounted) return;
+        setState(
+          () => _message =
+              'Added "${doc.fileName}" to Files. Find it under the Files tab.',
+        );
       }
+    } on LibraryException catch (error) {
       if (!mounted) return;
-      setState(() => _message = 'Added to Files. Find it under the Files tab.');
+      setState(() => _message = error.message);
     } catch (_) {
       if (!mounted) return;
       setState(() => _message = 'Could not add the document to Files.');
@@ -145,6 +156,5 @@ Future<LibraryDocument> addBytesToLibrary(
   DocumentLibrary? library,
 }) async {
   final lib = library ?? DocumentLibrary();
-  final doc = await lib.addFromBytes(bytes, displayName: name);
-  return doc;
+  return lib.addFromBytes(bytes, displayName: name);
 }
